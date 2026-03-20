@@ -1,0 +1,44 @@
+# === Node.js ===
+node_modules/
+.next/
+tsconfig.tsbuildinfo
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# === Environment & secrets ===
+.env
+.env.local
+.env.*.local
+
+# === Database & runtime data ===
+*.db
+backend/data/
+.openyakdb/
+
+# === IDE & OS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === Claude local config ===
+.claude/
+
+# === Build artifacts ===
+dist/
+build/
+*.egg
+out/
+desktop/release/
+desktop-tauri/src-tauri/target/
+
+# === Certificates & keys ===
+*.pem

@@ -1,0 +1,329 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""
+PyInstaller spec for the OpenYak backend.
+
+Build with:
+    cd backend
+    pyinstaller openyak.spec
+"""
+
+import os
+import sys
+from pathlib import Path
+
+block_cipher = None
+
+# Resolve paths
+backend_dir = os.path.abspath('.')
+app_dir = os.path.join(backend_dir, 'app')
+
+# Data files to include
+datas = [
+    # Agent prompt templates
+    (os.path.join(app_dir, 'agent', 'prompts'), os.path.join('app', 'agent', 'prompts')),
+    # Alembic migrations
+    (os.path.join(backend_dir, 'alembic'), 'alembic'),
+    (os.path.join(backend_dir, 'alembic.ini'), '.'),
+    # Bundled skills
+    (os.path.join(backend_dir, 'data', 'skills'), os.path.join('data', 'skills')),
+]
+
+# Filter out non-existent paths
+datas = [(src, dst) for src, dst in datas if os.path.exists(src)]
+
+# Hidden imports — modules that PyInstaller can't detect automatically
+hiddenimports = [
+    # FastAPI and dependencies
+    'uvicorn',
+    'uvicorn.logging',
+    'uvicorn.loops',
+    'uvicorn.loops.auto',
+    'uvicorn.protocols',
+    'uvicorn.protocols.http',
+    'uvicorn.protocols.http.auto',
+    'uvicorn.protocols.websockets',
+    'uvicorn.protocols.websockets.auto',
+    'uvicorn.lifespan',
+    'uvicorn.lifespan.on',
+    'fastapi',
+    'starlette',
+    'pydantic',
+    'pydantic_settings',
+
+    # Database
+    'sqlalchemy',
+    'sqlalchemy.ext.asyncio',
+    'aiosqlite',
+    'alembic',
+
+    # SSE
+    'sse_starlette',
+
+    # LLM
+    'openai',
+    'httpx',
+    'tiktoken',
+    'tiktoken_ext',
+    'tiktoken_ext.openai_public',
+
+    # Document processing
+    'pypdf',
+    'docx',
+    'openpyxl',
+    'pptx',
+    'markdown',
+
+    # PDF generation
+    'xhtml2pdf',
+    'reportlab',
+    'reportlab.graphics.barcode',
+    'reportlab.graphics.barcode.code128',
+    'reportlab.graphics.barcode.code39',
+    'reportlab.graphics.barcode.code93',
+    'reportlab.graphics.barcode.common',
+    'reportlab.graphics.barcode.eanbc',
+    'reportlab.graphics.barcode.ecc200datamatrix',
+    'reportlab.graphics.barcode.fourstate',
+    'reportlab.graphics.barcode.lto',
+    'reportlab.graphics.barcode.qr',
+    'reportlab.graphics.barcode.usps',
+    'reportlab.graphics.barcode.usps4s',
+    'reportlab.graphics.barcode.widgets',
+
+    # Data science
+    'pandas',
+    'numpy',
+    'matplotlib',
+
+    # Utilities
+    'ulid',
+    'aiofiles',
+    'yaml',
+    'anyio',
+    'anyio._backends',
+    'anyio._backends._asyncio',
+
+    # App modules
+    'app.main',
+    'app.config',
+    'app.dependencies',
+    'app.api',
+    'app.api.router',
+    'app.api.chat',
+    'app.api.sessions',
+    'app.api.messages',
+    'app.api.models',
+    'app.api.agents',
+    'app.api.tools',
+    'app.api.artifacts',
+    'app.api.pdf',
+    'app.api.files',
+    'app.api.skills',
+    'app.api.health',
+    'app.session.processor',
+    'app.session.llm',
+    'app.session.manager',
+    'app.session.compaction',
+    'app.session.system_prompt',
+    'app.session.title',
+    'app.session.retry',
+    'app.streaming.events',
+    'app.streaming.manager',
+    'app.models.base',
+    'app.models.session',
+    'app.models.message',
+    'app.models.project',
+    'app.models.todo',
+    'app.agent.agent',
+    'app.agent.permission',
+    'app.provider.base',
+    'app.provider.openrouter',
+    'app.provider.openai_compat',
+    'app.provider.registry',
+    'app.tool.registry',
+    'app.tool.context',
+    'app.tool.builtin.read',
+    'app.tool.builtin.write',
+    'app.tool.builtin.edit',
+    'app.tool.builtin.bash',
+    'app.tool.builtin.code_execute',
+    'app.tool.builtin.glob_tool',
+    'app.tool.builtin.grep',
+    'app.tool.builtin.artifact',
+    'app.tool.builtin.question',
+    'app.tool.builtin.todo',
+    'app.tool.builtin.task',
+    'app.tool.builtin.skill',
+    'app.tool.builtin.web_fetch',
+    'app.tool.builtin.web_search',
+    'app.tool.builtin.plan',
+    'app.tool.builtin.invalid',
+    'app.skill.registry',
+    'app.storage.database',
+    'app.schemas',
+]
+
+a = Analysis(
+    ['run.py'],
+    pathex=[backend_dir],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        # ── Testing & dev ────────────────────────────────────────────
+        'tkinter',
+        'test',
+        'unittest',
+        'pytest',
+        'pytest_asyncio',
+        '_pytest',
+        'IPython',
+        'ipykernel',
+        'notebook',
+        'jupyterlab',
+
+        # ── Deep Learning frameworks (~4.5 GB) ───────────────────────
+        'torch',
+        'torchvision',
+        'torchaudio',
+        'torch._C',
+        'torch.cuda',
+        'paddle',
+        'paddlepaddle',
+
+        # ── ML / NLP / CV libraries ──────────────────────────────────
+        'transformers',
+        'tokenizers',
+        'huggingface_hub',
+        'hf_xet',
+        'safetensors',
+        'datasets',
+        'accelerate',
+        'bitsandbytes',
+        'onnxruntime',
+        'onnx',
+        'sklearn',
+        'scikit-learn',
+        'scipy',
+        'spacy',
+        'thinc',
+        'blis',
+        'cymem',
+        'preshed',
+        'murmurhash',
+        'srsly',
+        'wasabi',
+        'langcodes',
+        'catalogue',
+        'confection',
+        'weasel',
+        'nltk',
+        'gensim',
+        'lightgbm',
+        'xgboost',
+        'catboost',
+        'sympy',
+
+        # ── Computer Vision ──────────────────────────────────────────
+        'cv2',
+        'opencv-python',
+        'imageio',
+        'imageio_ffmpeg',
+        'skimage',
+        'scikit-image',
+
+        # ── Numba / LLVM ─────────────────────────────────────────────
+        'numba',
+        'llvmlite',
+
+        # ── Arrow / Parquet (pulled by pandas but not needed at runtime)
+        'pyarrow',
+
+        # ── Audio / Video / Game ─────────────────────────────────────
+        'pygame',
+        'librosa',
+        'soundfile',
+        'pydub',
+        'yt_dlp',
+
+        # ── AWS SDK ──────────────────────────────────────────────────
+        'botocore',
+        'boto3',
+        's3transfer',
+
+        # ── gRPC / Proto ─────────────────────────────────────────────
+        'grpc',
+        'grpcio',
+        'google.protobuf',
+
+        # ── Heavy optional libs ──────────────────────────────────────
+        'gradio',
+        'altair',
+        'plotly',
+        'dash',
+        'bokeh',
+        'seaborn',
+        'statsmodels',
+        'psycopg2',
+        'psycopg',
+        'psycopg_binary',
+        'redis',
+        'celery',
+        'dask',
+        'distributed',
+        'ray',
+        'mlflow',
+        'wandb',
+        'tensorboard',
+        'tensorflow',
+        'keras',
+        'flax',
+        'jax',
+        'jaxlib',
+        'einops',
+        'triton',
+        'pdfplumber',
+        'pdfminer',
+        'camelot',
+        'tabula',
+        'fpdf2',
+        'fpdf',
+
+        # ── Crypto / misc pulled by yt-dlp ───────────────────────────
+        'Crypto',
+        'Cryptodome',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='openyak-backend',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='openyak-backend',
+)

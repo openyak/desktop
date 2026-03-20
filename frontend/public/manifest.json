@@ -1,0 +1,17 @@
+{
+  "name": "OpenYak Remote",
+  "short_name": "OpenYak",
+  "description": "Remote control for your desktop OpenYak AI assistant",
+  "start_url": "/m",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

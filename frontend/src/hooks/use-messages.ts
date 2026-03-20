@@ -1,0 +1,48 @@
+"use client";
+
+import { useMemo } from "react";
+import { useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { API, queryKeys } from "@/lib/constants";
+import type { PaginatedMessages } from "@/types/message";
+
+const PAGE_SIZE = 50;
+
+/**
+ * Hook to fetch messages with reverse infinite scroll.
+ *
+ * Initial load fetches the latest page (offset=-1).
+ * `fetchPreviousPage()` loads older messages.
+ * Pages are stored oldest-first: pages[0] = oldest loaded, pages[last] = newest.
+ */
+export function useMessages(sessionId: string | undefined) {
+  const query = useInfiniteQuery({
+    queryKey: queryKeys.messages.list(sessionId!),
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      api.get<PaginatedMessages>(API.MESSAGES.LIST(sessionId!, PAGE_SIZE, pageParam)),
+    initialPageParam: -1 as number,
+    getPreviousPageParam: (firstPage: PaginatedMessages) => {
+      if (firstPage.offset <= 0) return undefined;
+      return Math.max(0, firstPage.offset - PAGE_SIZE);
+    },
+    getNextPageParam: (): undefined => undefined,
+    enabled: !!sessionId,
+    refetchOnWindowFocus: true,
+    staleTime: 5_000, // Refetch if data is older than 5s (catches remote-generated sessions)
+    placeholderData: keepPreviousData,
+  });
+
+  // Flatten pages into a single chronological array
+  const messages = useMemo(
+    () => query.data?.pages.flatMap((p) => p.messages) ?? [],
+    [query.data],
+  );
+
+  const total = query.data?.pages[0]?.total ?? 0;
+
+  return {
+    ...query,
+    messages,
+    total,
+  };
+}

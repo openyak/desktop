@@ -1,0 +1,25 @@
+{
+  "name": "openyak",
+  "version": "0.0.1",
+  "private": true,
+  "description": "OpenYak — Your local AI assistant",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python -m uvicorn app.main:create_app --factory --reload --reload-dir app --host 0.0.0.0 --port 8000",
+    "dev:all": "concurrently -k -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:desktop": "concurrently -k -n backend,frontend,tauri -c blue,green,yellow \"npm run dev:backend\" \"npm run dev:frontend\" \"cd desktop-tauri && cargo tauri dev\"",
+    "build:frontend": "cd frontend && cross-env DESKTOP_BUILD=true NEXT_PUBLIC_DESKTOP_BUILD=true npm run build",
+    "build:backend": "cd backend && pyinstaller openyak.spec --noconfirm",
+    "sync:desktop-meta": "node scripts/sync-desktop-meta.mjs",
+    "build:desktop": "npm run sync:desktop-meta && cd desktop-tauri && cargo tauri build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.0",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.7.0",
+    "wait-on": "^8.0.0"
+  }
+}

@@ -1,0 +1,238 @@
+[English](README.md)
+
+# OpenYak 后端
+
+Python FastAPI 后端，复刻 OpenCode 完整 agent 架构，让开源模型（通过 OpenRouter）拥有 Claude Code 级别的 agentic 能力。
+
+## 快速开始
+
+```bash
+# 1. 安装依赖
+pip install -e ".[dev]"
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入 OPENYAK_OPENROUTER_API_KEY
+
+# 3. 启动服务
+uvicorn app.main:app --reload
+```
+
+服务启动后访问：
+- API 文档：http://localhost:8000/docs
+- 健康检查：http://localhost:8000/health
+
+## 架构
+
+```
+app/
+├── main.py              # FastAPI 入口 + lifespan
+├── config.py            # Pydantic Settings 配置
+├── dependencies.py      # FastAPI 依赖注入
+│
+├── agent/               # Agent 系统（7 个内置 agent）
+│   ├── agent.py         #   AgentRegistry + build/plan/explore/general/compaction/title/summary
+│   ├── permission.py    #   4 层权限引擎（全局 → agent → 用户 → 会话）
+│   └── prompts/         #   每个 agent 的 system prompt 模板
+│
+├── tool/                # 工具系统（19+ 个内置工具）
+│   ├── base.py          #   ToolDefinition ABC + ToolResult
+│   ├── context.py       #   ToolContext（权限检查、abort、metadata）
+│   ├── registry.py      #   ToolRegistry（按 agent 权限过滤）
+│   ├── truncation.py    #   输出截断（~30K 字符）
+│   └── builtin/         #   read, write, edit, bash, glob, grep, task, question, todo,
+│                        #   web_fetch, web_search, code_execute, artifact, plan, skill, ...
+│
+├── session/             # 核心执行循环
+│   ├── processor.py     #   THE CORE — 完整 agent loop（多步工具调用、doom loop 检测、
+│   │                    #   工具修复、权限门控）
+│   ├── manager.py       #   Session/Message CRUD + LLM 消息历史构建
+│   ├── compaction.py    #   两阶段上下文压缩（裁剪 + LLM 摘要）
+│   ├── system_prompt.py #   系统提示词构建
+│   ├── llm.py           #   LLM 流式调用桥接
+│   ├── retry.py         #   指数退避重试
+│   └── title.py         #   自动生成会话标题
+│
+├── provider/            # LLM 提供者
+│   ├── base.py          #   BaseProvider ABC
+│   ├── openai_compat.py #   OpenAI 兼容基类
+│   ├── openrouter.py    #   OpenRouter（主要提供者，支持 reasoning）
+│   ├── registry.py      #   ProviderRegistry
+│   └── tool_calling/    #   工具调用适配（原生 FC 检测 + prompt-based 回退）
+│
+├── streaming/           # 可恢复 SSE 流
+│   ├── events.py        #   SSEEvent 类型 + 编码
+│   └── manager.py       #   GenerationJob + StreamManager（支持断线重连）
+│
+├── models/              # SQLAlchemy ORM
+│   ├── base.py          #   DeclarativeBase + TimestampMixin + ULID 主键
+│   ├── project.py       #   Project 表
+│   ├── session.py       #   Session 表
+│   └── message.py       #   Message + Part 表（JSON data 列）
+│
+├── schemas/             # Pydantic v2 请求/响应模型
+├── storage/             # 数据库引擎 + 通用 CRUD
+├── api/                 # FastAPI 路由（17 个模块）
+├── connector/           # MCP 连接器管理
+├── skill/               # 技能系统（内置 + 项目级）
+├── plugin/              # 插件系统（加载/启用/禁用）
+├── fts/                 # 全文搜索（SQLite FTS5）
+├── scheduler/           # 后台任务调度器（cron）
+├── auth/                # 认证 & 远程隧道
+└── utils/               # ULID、token 计数、diff
+```
+
+## Agent 系统
+
+| Agent | 类型 | 说明 |
+|-------|------|------|
+| `build` | 主 Agent | 全功能助手，拥有所有工具；bash/write/edit 需请求权限 |
+| `plan` | 主 Agent | 只读分析模式（拒绝 write/edit/bash） |
+| `explore` | 子 Agent | 快速搜索与探索（read/glob/grep/bash/web） |
+| `general` | 子 Agent | 通用型，拥有所有工具访问权限 |
+| `compaction` | 隐藏 | 上下文摘要压缩（无工具） |
+| `title` | 隐藏 | 自动生成会话标题 |
+| `summary` | 隐藏 | 计算摘要统计 |
+
+## 工具系统
+
+| 工具 | 说明 |
+|------|------|
+| `read` | 读取文件内容（支持分页） |
+| `write` | 创建/写入文件 |
+| `edit` | 编辑文件范围（带 diff 展示） |
+| `apply_patch` | 应用 unified diff 补丁 |
+| `bash` | 执行 shell 命令 |
+| `code_execute` | 在隔离沙箱中运行 Python |
+| `glob` | 文件模式匹配 |
+| `grep` | 正则内容搜索 |
+| `search` | 全文搜索（FTS5） |
+| `question` | 向用户提问（阻塞等待） |
+| `todo` | 管理待办列表 |
+| `task` | 启动子任务（递归 agent） |
+| `plan` | 切换到计划模式（只读） |
+| `submit_plan` | 提交计划执行 |
+| `artifact` | 存储/检索内容块 |
+| `skill` | 执行内置/插件技能 |
+| `web_fetch` | 抓取并解析网页 |
+| `web_search` | 网页搜索（每日配额） |
+| `invalid` | 格式错误工具调用的兜底处理 |
+
+## API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康检查（含 provider 状态） |
+| POST | `/api/chat/prompt` | 开始生成 → 返回 `{stream_id, session_id}` |
+| GET | `/api/chat/stream/{id}` | SSE 流（支持 `?last_event_id=N` 断线重连） |
+| POST | `/api/chat/edit` | 编辑用户消息，删除后续消息并重新生成 |
+| POST | `/api/chat/abort` | 中止生成 |
+| GET | `/api/chat/active` | 列出活跃任务 |
+| POST | `/api/chat/respond` | 用户回复 question 工具 / 权限请求 |
+| GET/POST | `/api/sessions` | 列表 / 创建会话 |
+| GET/PATCH/DELETE | `/api/sessions/{id}` | 查看 / 更新 / 删除会话 |
+| GET | `/api/sessions/search` | 按标题和内容搜索会话 |
+| GET | `/api/sessions/{id}/export-pdf` | 导出对话为 PDF |
+| GET | `/api/messages/{session_id}` | 获取会话消息 + parts |
+| GET | `/api/agents` | 列出 agent |
+| GET | `/api/models` | 列出可用模型（来自 OpenRouter） |
+| GET | `/api/tools` | 列出工具 |
+| GET | `/api/skills` | 列出技能 |
+| POST | `/api/files/upload` | 上传文件 |
+| GET/POST | `/api/config` | 获取/设置应用配置 |
+| GET | `/api/usage` | Token 用量追踪 |
+
+## 核心 Agent Loop
+
+```
+用户输入 → 创建 UserMessage → 构建 system prompt → 解析工具
+    ↓
+┌─ while True: ──────────────────────────────────────────┐
+│  加载消息历史 → 调用 LLM 流式生成                        │
+│    ├── text-delta → 发布 SSE + 保存 TextPart            │
+│    ├── reasoning-delta → 发布 SSE + 保存 ReasoningPart  │
+│    ├── tool-call → doom loop 检测 → 权限检查 → 执行工具   │
+│    │     ├── 工具修复（大小写修正 → invalid 回退）         │
+│    │     ├── 保存 ToolPart（input/output/state）         │
+│    │     └── 如果是 task 工具 → 启动子 agent 循环         │
+│    └── usage → 检查上下文溢出 → 触发两阶段压缩            │
+│                                                         │
+│  无工具调用 → break                                      │
+│  有工具调用 → 继续循环（LLM 看到工具结果后决定下一步）      │
+└────────────────────────────────────────────────────────┘
+    ↓
+首轮自动生成标题 → 发布 done 事件
+```
+
+## 权限系统
+
+4 层层级权限引擎：
+
+1. **全局** — 所有 agent 的基础规则
+2. **Agent** — 每个 agent 的独立规则集
+3. **用户** — 会话级覆盖
+4. **会话** — 对话级特定规则
+
+每个工具可设置为 `allow`（允许）、`deny`（拒绝）或 `ask`（在 UI 中询问用户）。
+
+## 使用示例
+
+```bash
+# 简单聊天
+curl -X POST http://localhost:8000/api/chat/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello!", "model": "z-ai/glm-4.7-flash"}'
+# 返回: {"stream_id": "...", "session_id": "..."}
+
+# 订阅 SSE 流
+curl -N http://localhost:8000/api/chat/stream/{stream_id}
+
+# 工具调用（agent 自动调用 read/grep 等工具）
+curl -X POST http://localhost:8000/api/chat/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Read the file at ./app/main.py and explain what it does"}'
+
+# 列出工具
+curl http://localhost:8000/api/tools
+
+# 列出 agent
+curl http://localhost:8000/api/agents
+```
+
+## 技术栈
+
+- **Python 3.12+** / FastAPI / Pydantic v2
+- **SQLAlchemy** (async) + SQLite WAL
+- **OpenAI SDK** → OpenRouter（支持 reasoning tokens）
+- **SSE** 可恢复流式传输
+- **ULID** 主键
+- **tiktoken** token 计数
+- **PyInstaller** 独立打包
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OPENYAK_OPENROUTER_API_KEY` | OpenRouter API 密钥 | （必填） |
+| `OPENYAK_DATABASE_URL` | 数据库连接字符串 | `sqlite+aiosqlite:///./data/openyak.db` |
+| `OPENYAK_HOST` | 监听地址 | `0.0.0.0` |
+| `OPENYAK_PORT` | 监听端口 | `8000` |
+| `OPENYAK_DEBUG` | 调试模式 | `false` |
+| `OPENYAK_PROJECT_DIR` | 工作区根目录（文件操作用） | `.` |
+| `OPENYAK_COMPACTION_AUTO` | 自动上下文压缩 | `true` |
+| `OPENYAK_DAILY_SEARCH_LIMIT` | 每日网页搜索配额 | `20` |
+| `OPENYAK_FTS_ENABLED` | 全文搜索索引 | `true` |
+
+## 构建与部署
+
+```bash
+# 开发模式
+uvicorn app.main:app --reload
+
+# 桌面模式（独立入口）
+python run.py --port 8100 --data-dir /path/to/app/data
+
+# 生产构建（PyInstaller 打包）
+pyinstaller openyak.spec
+./dist/openyak
+```

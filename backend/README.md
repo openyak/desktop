@@ -1,0 +1,242 @@
+[中文](README.zh-CN.md)
+
+# OpenYak Backend
+
+Python FastAPI backend that replicates OpenCode's complete agent architecture, bringing Claude Code-level agentic capabilities to open-source models via OpenRouter.
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+pip install -e ".[dev]"
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env — set OPENYAK_OPENROUTER_API_KEY
+
+# 3. Start the server
+uvicorn app.main:app --reload
+```
+
+After startup:
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+
+## Architecture
+
+```
+app/
+├── main.py              # FastAPI entry + lifespan
+├── config.py            # Pydantic Settings configuration
+├── dependencies.py      # FastAPI dependency injection
+│
+├── agent/               # Agent system (7 built-in agents)
+│   ├── agent.py         #   AgentRegistry + build/plan/explore/general/compaction/title/summary
+│   ├── permission.py    #   4-layer permission engine (global → agent → user → session)
+│   └── prompts/         #   System prompt templates per agent
+│
+├── tool/                # Tool system (19+ built-in tools)
+│   ├── base.py          #   ToolDefinition ABC + ToolResult
+│   ├── context.py       #   ToolContext (permission checks, abort, metadata)
+│   ├── registry.py      #   ToolRegistry (per-agent permission filtering)
+│   ├── truncation.py    #   Output truncation (~30K chars)
+│   └── builtin/         #   read, write, edit, bash, glob, grep, task, question, todo,
+│                        #   web_fetch, web_search, code_execute, artifact, plan, skill, ...
+│
+├── session/             # Core execution loop
+│   ├── processor.py     #   THE CORE — full agent loop (multi-step tool calling, doom loop
+│   │                    #   detection, tool fixing, permission gating)
+│   ├── manager.py       #   Session/Message CRUD + LLM message history construction
+│   ├── compaction.py    #   Two-stage context compression (trim + LLM summarization)
+│   ├── system_prompt.py #   System prompt construction
+│   ├── llm.py           #   LLM streaming bridge
+│   ├── retry.py         #   Exponential backoff retry
+│   └── title.py         #   Auto-generate session titles
+│
+├── provider/            # LLM providers
+│   ├── base.py          #   BaseProvider ABC
+│   ├── openai_compat.py #   OpenAI-compatible base class
+│   ├── openrouter.py    #   OpenRouter (primary provider, reasoning model support)
+│   ├── registry.py      #   ProviderRegistry
+│   └── tool_calling/    #   Tool calling adapters (native FC detection + prompt-based fallback)
+│
+├── streaming/           # Resumable SSE streams
+│   ├── events.py        #   SSEEvent types + encoding
+│   └── manager.py       #   GenerationJob + StreamManager (reconnection support)
+│
+├── models/              # SQLAlchemy ORM
+│   ├── base.py          #   DeclarativeBase + TimestampMixin + ULID primary keys
+│   ├── project.py       #   Project table
+│   ├── session.py       #   Session table
+│   └── message.py       #   Message + Part tables (JSON data column)
+│
+├── schemas/             # Pydantic v2 request/response models
+├── storage/             # Database engine + generic CRUD
+├── api/                 # FastAPI routes (17 modules)
+├── connector/           # MCP connector management
+├── skill/               # Skill system (bundled + project-scoped)
+├── plugin/              # Plugin system (load/enable/disable)
+├── fts/                 # Full-text search (SQLite FTS5)
+├── scheduler/           # Background task scheduler (cron)
+├── auth/                # Authentication & remote tunnel
+└── utils/               # ULID, token counting, diff
+```
+
+## Agents
+
+| Agent | Type | Description |
+|-------|------|-------------|
+| `build` | Primary | Full-featured assistant with all tools; asks permission for bash/write/edit |
+| `plan` | Primary | Read-only analysis mode (denies write/edit/bash) |
+| `explore` | Subagent | Fast search & exploration (read/glob/grep/bash/web) |
+| `general` | Subagent | General-purpose with full tool access |
+| `compaction` | Hidden | Context summarization (no tools) |
+| `title` | Hidden | Auto-generates session titles |
+| `summary` | Hidden | Computes summary statistics |
+
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| `read` | Read file contents (with pagination) |
+| `write` | Create/write files |
+| `edit` | Edit file ranges (with diff viewer) |
+| `apply_patch` | Apply unified diffs |
+| `bash` | Execute shell commands |
+| `code_execute` | Run Python in isolated sandbox |
+| `glob` | File pattern matching |
+| `grep` | Content search with regex |
+| `search` | Full-text search (FTS5) |
+| `question` | Ask user for input (blocking) |
+| `todo` | Manage task todo list |
+| `task` | Launch subtask (recursive agent) |
+| `plan` | Switch to plan mode (read-only) |
+| `submit_plan` | Submit plan for execution |
+| `artifact` | Store/retrieve content blocks |
+| `skill` | Execute bundled/plugin skills |
+| `web_fetch` | Fetch & parse web pages |
+| `web_search` | Web search (daily quota) |
+| `invalid` | Fallback for malformed tool calls |
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check (includes provider status) |
+| POST | `/api/chat/prompt` | Start generation → returns `{stream_id, session_id}` |
+| GET | `/api/chat/stream/{id}` | SSE stream (supports `?last_event_id=N` reconnection) |
+| POST | `/api/chat/edit` | Edit user message, delete subsequent, re-generate |
+| POST | `/api/chat/abort` | Abort generation |
+| GET | `/api/chat/active` | List active generation jobs |
+| POST | `/api/chat/respond` | User responds to question tool / permission request |
+| GET/POST | `/api/sessions` | List / create sessions |
+| GET/PATCH/DELETE | `/api/sessions/{id}` | View / update / delete session |
+| GET | `/api/sessions/search` | Search sessions by title & content |
+| GET | `/api/sessions/{id}/export-pdf` | Export conversation as PDF |
+| GET | `/api/messages/{session_id}` | Get session messages + parts |
+| GET | `/api/agents` | List agents |
+| GET | `/api/models` | List available models (from OpenRouter) |
+| GET | `/api/tools` | List tools |
+| GET | `/api/skills` | List skills |
+| POST | `/api/files/upload` | Upload files |
+| GET/POST | `/api/config` | Get/set app configuration |
+| GET | `/api/usage` | Token usage tracking |
+
+## Core Agent Loop
+
+```
+User Input → Create UserMessage → Build system prompt → Resolve tools
+    ↓
+┌─ while True: ──────────────────────────────────────────┐
+│  Load message history → Call LLM (streaming)           │
+│    ├── text-delta → publish SSE + save TextPart        │
+│    ├── reasoning-delta → publish SSE + save Reasoning  │
+│    ├── tool-call → doom loop check → permission check  │
+│    │     → execute tool                                │
+│    │     ├── Tool fixing (case correction → invalid    │
+│    │     │   fallback)                                 │
+│    │     ├── Save ToolPart (input/output/state)        │
+│    │     └── If task tool → launch sub-agent loop      │
+│    └── usage → check context overflow → trigger        │
+│          two-stage compression                         │
+│                                                        │
+│  No tool calls → break                                 │
+│  Has tool calls → continue (LLM sees results, decides  │
+│  next step)                                            │
+└────────────────────────────────────────────────────────┘
+    ↓
+Auto-generate title on first turn → publish done event
+```
+
+## Permission System
+
+4-layer hierarchical permission engine:
+
+1. **Global** — Base rules for all agents
+2. **Agent** — Per-agent ruleset
+3. **User** — Session-scoped overrides
+4. **Session** — Conversation-specific rules
+
+Each tool can be set to `allow`, `deny`, or `ask` (prompts user in UI).
+
+## Usage Examples
+
+```bash
+# Simple chat
+curl -X POST http://localhost:8000/api/chat/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello!", "model": "z-ai/glm-4.7-flash"}'
+# Returns: {"stream_id": "...", "session_id": "..."}
+
+# Subscribe to SSE stream
+curl -N http://localhost:8000/api/chat/stream/{stream_id}
+
+# Tool calling (agent auto-invokes read/grep/etc.)
+curl -X POST http://localhost:8000/api/chat/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Read the file at ./app/main.py and explain what it does"}'
+
+# List tools
+curl http://localhost:8000/api/tools
+
+# List agents
+curl http://localhost:8000/api/agents
+```
+
+## Tech Stack
+
+- **Python 3.12+** / FastAPI / Pydantic v2
+- **SQLAlchemy** (async) + SQLite WAL
+- **OpenAI SDK** → OpenRouter (reasoning token support)
+- **SSE** resumable streaming
+- **ULID** primary keys
+- **tiktoken** token counting
+- **PyInstaller** standalone build
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENYAK_OPENROUTER_API_KEY` | OpenRouter API key | (required) |
+| `OPENYAK_DATABASE_URL` | Database connection string | `sqlite+aiosqlite:///./data/openyak.db` |
+| `OPENYAK_HOST` | Listen address | `0.0.0.0` |
+| `OPENYAK_PORT` | Listen port | `8000` |
+| `OPENYAK_DEBUG` | Debug mode | `false` |
+| `OPENYAK_PROJECT_DIR` | Workspace root (for file operations) | `.` |
+| `OPENYAK_COMPACTION_AUTO` | Auto context compression | `true` |
+| `OPENYAK_DAILY_SEARCH_LIMIT` | Daily web search quota | `20` |
+| `OPENYAK_FTS_ENABLED` | Full-text search indexing | `true` |
+
+## Build & Deploy
+
+```bash
+# Development
+uvicorn app.main:app --reload
+
+# Desktop mode (standalone entry point)
+python run.py --port 8100 --data-dir /path/to/app/data
+
+# Production (PyInstaller bundle)
+pyinstaller openyak.spec
+./dist/openyak
+```

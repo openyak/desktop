@@ -1,0 +1,116 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Copy, Check, RefreshCw, ThumbsUp, ThumbsDown, ListTree } from "lucide-react";
+import { useActivityStore, type ActivityData } from "@/stores/activity-store";
+
+interface MessageActionsProps {
+  content: string;
+  onRegenerate?: () => void;
+  activityData?: ActivityData | null;
+}
+
+export function MessageActions({ content, onRegenerate, activityData }: MessageActionsProps) {
+  const [copied, setCopied] = useState(false);
+  const [liked, setLiked] = useState<"up" | "down" | null>(null);
+  const toggleForMessage = useActivityStore((s) => s.toggleForMessage);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [content]);
+
+  return (
+    <div className="flex items-center gap-0.5 pt-2">
+      {/* Copy */}
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex items-center justify-center h-7 w-7 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+        aria-label={copied ? "Copied" : "Copy"}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {copied ? (
+            <motion.span
+              key="check"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+              className="flex items-center justify-center"
+            >
+              <Check className="h-4 w-4 text-[var(--color-success)]" />
+            </motion.span>
+          ) : (
+            <motion.span
+              key="copy"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex items-center justify-center"
+            >
+              <Copy className="h-4 w-4" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </button>
+
+      {/* Regenerate */}
+      {onRegenerate && (
+        <button
+          type="button"
+          onClick={onRegenerate}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+          aria-label="Regenerate"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Activity */}
+      {activityData && (
+        <button
+          type="button"
+          onClick={() => toggleForMessage(activityData)}
+          className="flex items-center justify-center h-7 w-7 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+          aria-label="View activity"
+        >
+          <ListTree className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Like */}
+      <button
+        type="button"
+        onClick={() => setLiked(liked === "up" ? null : "up")}
+        className={`flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
+          liked === "up"
+            ? "text-[var(--text-primary)] bg-[var(--surface-secondary)]"
+            : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"
+        }`}
+        aria-label="Good response"
+        aria-pressed={liked === "up"}
+      >
+        <ThumbsUp className="h-4 w-4" />
+      </button>
+
+      {/* Dislike */}
+      <button
+        type="button"
+        onClick={() => setLiked(liked === "down" ? null : "down")}
+        className={`flex items-center justify-center h-7 w-7 rounded-md transition-colors ${
+          liked === "down"
+            ? "text-[var(--text-primary)] bg-[var(--surface-secondary)]"
+            : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"
+        }`}
+        aria-label="Bad response"
+        aria-pressed={liked === "down"}
+      >
+        <ThumbsDown className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}

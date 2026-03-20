@@ -1,0 +1,68 @@
+[project]
+name = "openyak"
+version = "0.0.1"
+description = "Your local AI assistant — private, powerful, personal"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sse-starlette>=2.2.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20.0",
+    "alembic>=1.14.0",
+
+    # LLM client
+    "openai>=1.60.0",
+    "httpx>=0.28.0",
+
+    # Utilities
+    "python-ulid>=3.0.0",
+    "tiktoken>=0.8.0",
+    "aiofiles>=24.1.0",
+    "pyyaml>=6.0",
+    "croniter>=2.0.0",
+
+    # Office document reading & creation
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.23",
+    "markdown>=3.5",
+    "xhtml2pdf>=0.2.16",
+
+    # Data science (used by code_execute)
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0.0"]
+local = ["litellm>=1.55.0"]
+office = [
+    "pdfplumber>=0.11.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["app/**"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

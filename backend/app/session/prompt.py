@@ -1,0 +1,627 @@
+"""Session prompt orchestrator.
+
+Owns the setup phase and the main agent while-loop.
+Mirrors OpenCode's session/prompt.ts.
+
+Separation of concerns:
+  - SessionPrompt: setup + cross-step state + loop skeleton
+  - SessionProcessor: single LLM step execution + tool dispatching
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.agent.agent import AgentRegistry
+from app.agent.permission import (
+    GLOBAL_DEFAULTS,
+    merge_rulesets,
+    parse_session_permissions,
+    presets_to_ruleset,
+)
+from app.models.message import Message
+from app.provider.registry import ProviderRegistry
+from app.schemas.chat import PromptRequest
+from app.session.manager import (
+    create_message,
+    create_part,
+    create_session,
+    get_messages,
+    get_session,
+    update_session_title,
+)
+from app.session.system_prompt import build_system_prompt
+from app.streaming.events import (
+    AGENT_ERROR,
+    DONE,
+    STEP_START,
+    SSEEvent,
+)
+from app.streaming.manager import GenerationJob
+from app.tool.registry import ToolRegistry
+from app.config import get_settings
+
+if TYPE_CHECKING:
+    from app.schemas.agent import AgentInfo
+    from app.session.processor import SessionProcessor
+
+logger = logging.getLogger(__name__)
+
+# Hard safety cap: absolute maximum number of agent loop iterations
+_HARD_MAX_STEPS = 50
+
+# Completion guard: max nudges before giving up on incomplete todos
+MAX_CONTINUATION_ATTEMPTS = 10
+
+
+class SessionPrompt:
+    """Owns the setup phase and the main agent while-loop.
+
+    Instance state is split into:
+      - Setup state: resolved agent/model/provider, system prompt, permissions
+      - Cross-step loop state: cost, tokens, doom history, todos, etc.
+
+    SessionProcessor is created fresh per loop step and writes back mutable
+    state (agent, model_id, etc.) on agent switching.
+    """
+
+    def __init__(
+        self,
+        job: GenerationJob,
+        request: PromptRequest,
+        *,
+        session_factory: async_sessionmaker[AsyncSession],
+        provider_registry: ProviderRegistry,
+        agent_registry: AgentRegistry,
+        tool_registry: ToolRegistry,
+        index_manager: Any | None = None,
+        skip_user_message: bool = False,
+    ) -> None:
+        self.job = job
+        self.request = request
+        self.session_factory = session_factory
+        self.provider_registry = provider_registry
+        self.agent_registry = agent_registry
+        self.tool_registry = tool_registry
+        self.index_manager = index_manager
+        self.skip_user_message = skip_user_message
+
+        # Populated by _setup() — setup-phase state
+        self.agent: AgentInfo | None = None  # type: ignore[assignment]
+        self.model_id: str | None = None
+        self.provider: Any | None = None
+        self.model_info: Any | None = None
+        self.directory: str | None = None
+        self.workspace: str | None = None
+        self.skill_names: list[str] = []
+        self.fts_status: dict[str, Any] | None = None
+        self.system_prompt: str = ""
+        self.merged_permissions: list = []
+        self.preset_permissions: list = []
+        self.session_permissions: list = []
+        self.is_first_turn: bool = False
+        self.first_user_text: str = request.text
+        self.session_permission_data: Any = None
+
+        # Cross-step loop state
+        self.step: int = 0
+        self.doom_history: list[str] = []
+        self.total_cost: float = 0.0
+        self.total_tokens_accumulated: dict[str, int] = {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0,
+        }
+        self.latest_tokens_snapshot: dict[str, int] = {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache_read": 0,
+            "cache_write": 0,
+            "total": 0,
+        }
+        self.current_todos: list[dict[str, Any]] = []
+        self.continuation_attempts: int = 0
+        self.finish_reason: str = "stop"
+        self.assistant_msg_id: str | None = None
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    async def run(self) -> None:
+        """Main entry point: setup → loop → post-loop."""
+        await self._setup()
+        await self._loop()
+        await self._post_loop()
+
+    # ------------------------------------------------------------------
+    # Setup phase (steps 1-5 from the original _run_generation_inner)
+    # ------------------------------------------------------------------
+
+    async def _setup(self) -> None:
+        """Resolve agent/model, create session, build system prompt, merge permissions."""
+
+        # --- 1. Resolve agent ---
+        self.agent = self.agent_registry.get(self.request.agent) or self.agent_registry.default_agent()
+
+        # --- 2. Resolve model & provider (with per-agent model override) ---
+        model_id = self.request.model
+        if not model_id and self.agent.model:
+            model_id = self.agent.model.model_id
+
+        if not model_id:
+            for _m in self.provider_registry.all_models():
+                if _m.pricing.prompt == 0 and _m.pricing.completion == 0:
+                    model_id = _m.id
+                    break
+            if not model_id:
+                all_models = self.provider_registry.all_models()
+                if all_models:
+                    model_id = all_models[0].id
+
+        resolved = self.provider_registry.resolve_model(model_id)
+        if not resolved:
+            try:
+                await self.provider_registry.refresh_models()
+                resolved = self.provider_registry.resolve_model(model_id)
+            except Exception:
+                pass
+        if not resolved:
+            self.job.publish(SSEEvent(AGENT_ERROR, {"error_message": f"Model not found: {model_id}"}))
+            raise RuntimeError(f"Model not found: {model_id}")
+
+        self.provider, self.model_info = resolved
+        self.model_id = model_id
+
+        # --- 3. Create/load session and persist user message ---
+        if self.skip_user_message:
+            async with self.session_factory() as db:
+                async with db.begin():
+                    session = await get_session(db, self.job.session_id)
+                    if session:
+                        self.session_permission_data = session.permission
+        else:
+            async with self.session_factory() as db:
+                async with db.begin():
+                    session = await get_session(db, self.job.session_id)
+                    if session is None:
+                        session = await create_session(
+                            db,
+                            id=self.job.session_id,
+                            directory=self.request.workspace or ".",
+                        )
+                        self.is_first_turn = True
+                    else:
+                        self.session_permission_data = session.permission
+
+                    user_msg = await create_message(
+                        db,
+                        session_id=session.id,
+                        data={"role": "user", "agent": self.agent.name},
+                    )
+                    await create_part(
+                        db,
+                        message_id=user_msg.id,
+                        session_id=session.id,
+                        data={"type": "text", "text": self.request.text},
+                    )
+
+                    for att in self.request.attachments:
+                        await create_part(
+                            db,
+                            message_id=user_msg.id,
+                            session_id=session.id,
+                            data={
+                                "type": "file",
+                                "file_id": att.get("file_id", ""),
+                                "name": att.get("name", ""),
+                                "path": att.get("path", ""),
+                                "size": att.get("size", 0),
+                                "mime_type": att.get("mime_type", ""),
+                                "source": att.get("source", "uploaded"),
+                                "content_hash": att.get("content_hash"),
+                            },
+                        )
+
+        # --- 4. Build system prompt ---
+        async with self.session_factory() as db:
+            async with db.begin():
+                session = await get_session(db, self.job.session_id)
+                if session:
+                    self.directory = session.directory
+
+        skill_tool = self.tool_registry.get("skill")
+        if skill_tool is not None and hasattr(skill_tool, "_skill_registry"):
+            sr = skill_tool._skill_registry
+            if sr is not None:
+                self.skill_names = sr.skill_names()
+
+        self.workspace = (
+            self.directory if self.directory and self.directory != "." else self.request.workspace
+        )
+
+        if self.index_manager is not None and self.workspace:
+            try:
+                await self.index_manager.ensure_index(self.workspace, self.job.session_id)
+                self.fts_status = self.index_manager.index_status(self.job.session_id)
+
+                # Ingest attachments that live OUTSIDE the workspace
+                if self.request.attachments:
+                    from pathlib import Path as _Path
+                    ws_resolved = _Path(self.workspace).resolve()
+                    for att in self.request.attachments:
+                        att_path = att.get("path")
+                        if not att_path or not _Path(att_path).exists():
+                            continue
+                        try:
+                            _Path(att_path).resolve().relative_to(ws_resolved)
+                            continue
+                        except ValueError:
+                            pass
+                        try:
+                            await self.index_manager.ingest_file(self.workspace, att_path)
+                            logger.info("FTS: ingested attachment %s", att_path)
+                        except Exception as e:
+                            logger.warning("FTS: failed to ingest attachment %s: %s", att_path, e)
+            except Exception as e:
+                logger.warning("FTS: setup failed for session %s: %s", self.job.session_id, e)
+
+        self.system_prompt = build_system_prompt(
+            self.agent,
+            directory=self.directory,
+            skill_names=self.skill_names if self.skill_names else None,
+            workspace=self.workspace,
+            fts_status=self.fts_status,
+        )
+
+        # --- 5. Merge permission rulesets (global → agent → presets → session) ---
+        self.session_permissions = parse_session_permissions(self.session_permission_data)
+        self.preset_permissions = presets_to_ruleset(self.request.permission_presets)
+        self.merged_permissions = merge_rulesets(
+            GLOBAL_DEFAULTS,
+            self.agent.permissions,
+            self.preset_permissions,
+            self.session_permissions,
+        )
+
+        # --- Reconstruct artifact cache from message history ---
+        # Allows update/rewrite operations to work across generations.
+        async with self.session_factory() as db:
+            async with db.begin():
+                _hist_msgs = await get_messages(db, self.job.session_id)
+                for _msg in _hist_msgs:
+                    for _part in _msg.parts:
+                        _pd = _part.data or {}
+                        if _pd.get("type") == "tool" and _pd.get("tool") == "artifact":
+                            _state = _pd.get("state") or {}
+                            _meta = _state.get("metadata") or {}
+                            _inp = _state.get("input") or {}
+                            _ident = _meta.get("identifier") or _inp.get("identifier")
+                            _cont = _meta.get("content") or _inp.get("content")
+                            if _ident and _cont:
+                                self.job.artifact_cache[_ident] = {
+                                    "content": _cont,
+                                    "type": _meta.get("type") or _inp.get("type", "code"),
+                                    "title": _meta.get("title") or _inp.get("title", "Untitled"),
+                                    "language": _meta.get("language") or _inp.get("language"),
+                                }
+
+    # ------------------------------------------------------------------
+    # Main agent while-loop
+    # ------------------------------------------------------------------
+
+    async def _loop(self) -> None:
+        """Main agent while-loop: step → LLM → tools → repeat."""
+        # Deferred import to avoid circular dependency (processor imports prompt via TYPE_CHECKING only)
+        from app.session.processor import (
+            SessionProcessor,
+            _delete_empty_assistant_messages,
+            _sanitize_llm_messages_for_request,
+        )
+        from app.session.compaction import run_compaction, should_compact
+        from app.session.manager import create_message as _create_message, get_message_history_for_llm
+
+        _hard_cap_final_done = False
+
+        while True:
+            if self.job.abort_event.is_set():
+                break
+
+            self.step += 1
+
+            if self.step > _HARD_MAX_STEPS:
+                if _hard_cap_final_done:
+                    # Already did the forced final step — truly stop now
+                    logger.warning(
+                        "Hard step cap+1 reached for session %s, stopping",
+                        self.job.session_id,
+                    )
+                    break
+
+                # First time hitting the cap: inject a summary request and let
+                # one more LLM step execute so the agent can wrap up gracefully
+                _hard_cap_final_done = True
+                logger.warning(
+                    "Hard step cap (%d) reached for session %s, requesting final summary",
+                    _HARD_MAX_STEPS,
+                    self.job.session_id,
+                )
+                async with self.session_factory() as db:
+                    async with db.begin():
+                        cap_msg = await _create_message(
+                            db,
+                            session_id=self.job.session_id,
+                            data={"role": "user", "agent": self.agent.name, "system": True},
+                        )
+                        await create_part(
+                            db,
+                            message_id=cap_msg.id,
+                            session_id=self.job.session_id,
+                            data={
+                                "type": "text",
+                                "text": (
+                                    "[System: You have reached the maximum number of steps. "
+                                    "Stop using tools and provide a final summary of what you "
+                                    "have accomplished and any remaining work.]"
+                                ),
+                            },
+                        )
+                # Fall through to normal step execution (do NOT break or continue)
+
+            self.job.publish(SSEEvent(STEP_START, {"step": self.step, "session_id": self.job.session_id}))
+
+            # Proactively refresh proxy token if expired (step 1 only)
+            if self.step == 1:
+                _settings = get_settings()
+                if _settings.proxy_url and _settings.proxy_refresh_token:
+                    from app.session.processor import _is_jwt_expired
+                    _token = getattr(_settings, "proxy_token", "")
+                    if _token and _is_jwt_expired(_token):
+                        logger.info("Proxy token expired, refreshing before LLM call")
+                        from app.provider.proxy_auth import refresh_proxy_token
+                        await refresh_proxy_token(_settings, self.provider_registry)
+
+            # Load message history for this step
+            async with self.session_factory() as db:
+                async with db.begin():
+                    llm_messages = await get_message_history_for_llm(db, self.job.session_id)
+            llm_messages = _sanitize_llm_messages_for_request(
+                llm_messages,
+                session_id=self.job.session_id,
+                model_max_context=(
+                    self.model_info.capabilities.max_context
+                    if self.model_info
+                    else None
+                ),
+            )
+
+            # Create assistant message shell
+            async with self.session_factory() as db:
+                async with db.begin():
+                    assistant_msg = await _create_message(
+                        db,
+                        session_id=self.job.session_id,
+                        data={
+                            "role": "assistant",
+                            "agent": self.agent.name,
+                            "model_id": self.model_id,
+                            "provider_id": self.provider.id,
+                        },
+                    )
+            self.assistant_msg_id = assistant_msg.id
+
+            # Execute one LLM step — processor handles streaming + tool dispatch
+            processor: SessionProcessor = SessionProcessor(
+                session_prompt=self,
+                llm_messages=llm_messages,
+                assistant_msg_id=self.assistant_msg_id,
+            )
+            result = await processor.process()
+
+            # Accumulate cost and tokens from this step
+            self.total_cost += processor.step_cost
+            self.finish_reason = processor.finish_reason
+            if processor.usage_data:
+                for k in self.total_tokens_accumulated:
+                    self.total_tokens_accumulated[k] += processor.usage_data.get(k, 0)
+                self.latest_tokens_snapshot = {
+                    "input": processor.usage_data.get("input", 0),
+                    "output": processor.usage_data.get("output", 0),
+                    "reasoning": processor.usage_data.get("reasoning", 0),
+                    "cache_read": processor.usage_data.get("cache_read", 0),
+                    "cache_write": processor.usage_data.get("cache_write", 0),
+                    "total": processor.usage_data.get("total", 0),
+                }
+
+            # Handle processor result
+            if result == "compact":
+                await run_compaction(
+                    self.job.session_id,
+                    job=self.job,
+                    session_factory=self.session_factory,
+                    provider_registry=self.provider_registry,
+                    agent_registry=self.agent_registry,
+                    model_id=self.model_id,
+                )
+                continue
+
+            if result == "stop":
+                # Length continuation: model hit token limit, keep going
+                if self.finish_reason == "length":
+                    logger.info(
+                        "finish_reason=length at step %d, continuing for more output",
+                        self.step,
+                    )
+                    continue
+
+                # First-turn tool nudge: if step 1 had 3+ attachments but no tool calls,
+                # nudge the model to use tools for analysis
+                if (
+                    self.step == 1
+                    and len(self.request.attachments) >= 3
+                    and not self.job.abort_event.is_set()
+                ):
+                    logger.info(
+                        "First-turn tool nudge: %d attachments with no tool calls",
+                        len(self.request.attachments),
+                    )
+                    async with self.session_factory() as db:
+                        async with db.begin():
+                            nudge_msg = await _create_message(
+                                db,
+                                session_id=self.job.session_id,
+                                data={"role": "user", "agent": self.agent.name, "system": True},
+                            )
+                            await create_part(
+                                db,
+                                message_id=nudge_msg.id,
+                                session_id=self.job.session_id,
+                                data={
+                                    "type": "text",
+                                    "text": (
+                                        "[System: You have access to tools. Please use them to "
+                                        "analyze the attached files and provide a thorough response.]"
+                                    ),
+                                },
+                            )
+                    continue
+
+                # Completion guard: nudge agent if it stopped with incomplete todos
+                incomplete = [
+                    t for t in self.current_todos
+                    if t.get("status") in ("pending", "in_progress")
+                ]
+                if incomplete and self.continuation_attempts < MAX_CONTINUATION_ATTEMPTS:
+                    self.continuation_attempts += 1
+                    incomplete_names = ", ".join(
+                        t.get("content", "unnamed") for t in incomplete[:5]
+                    )
+                    logger.info(
+                        "Completion guard: %d incomplete todo(s), attempt %d/%d",
+                        len(incomplete),
+                        self.continuation_attempts,
+                        MAX_CONTINUATION_ATTEMPTS,
+                    )
+                    async with self.session_factory() as db:
+                        async with db.begin():
+                            cont_msg = await _create_message(
+                                db,
+                                session_id=self.job.session_id,
+                                data={"role": "user", "agent": self.agent.name, "system": True},
+                            )
+                            await create_part(
+                                db,
+                                message_id=cont_msg.id,
+                                session_id=self.job.session_id,
+                                data={
+                                    "type": "text",
+                                    "text": (
+                                        f"[System: You have {len(incomplete)} incomplete todo(s): "
+                                        f"{incomplete_names}. "
+                                        f"Continue working on them. Call the todo tool to update "
+                                        f"status, then use tools to complete each task.]"
+                                    ),
+                                },
+                            )
+                    continue
+
+                break  # No tool calls, no incomplete todos → done
+
+            # result == "continue": has tool calls, loop again with tool results
+
+    # ------------------------------------------------------------------
+    # Post-loop: cleanup, persist cost, DONE, auto-title
+    # ------------------------------------------------------------------
+
+    async def _post_loop(self) -> None:
+        """Cleanup, persist accumulated cost/tokens, publish DONE, auto-title."""
+        from app.session.processor import _delete_empty_assistant_messages, _auto_title
+
+        await _delete_empty_assistant_messages(self.session_factory, self.job.session_id)
+
+        # Persist accumulated cost and tokens on the last assistant message
+        if self.assistant_msg_id and (
+            self.total_cost > 0 or any(v > 0 for v in self.total_tokens_accumulated.values())
+        ):
+            try:
+                async with self.session_factory() as db:
+                    async with db.begin():
+                        msg = await db.get(Message, self.assistant_msg_id)
+                        if msg:
+                            updated_data = dict(msg.data) if msg.data else {}
+                            updated_data["cost"] = self.total_cost
+                            # Latest step snapshot for UI display (matches OpenCode style)
+                            updated_data["tokens"] = self.latest_tokens_snapshot
+                            # Full accumulated totals for diagnostics
+                            updated_data["tokens_accumulated"] = self.total_tokens_accumulated
+                            msg.data = updated_data
+            except Exception:
+                logger.warning(
+                    "Failed to persist cost/tokens on message %s", self.assistant_msg_id
+                )
+
+        # Publish DONE immediately so the frontend unlocks the UI.
+        # Title generation runs *after* DONE — it can take seconds and the frontend
+        # schedules a delayed sessions refetch that picks up the title from DB.
+        self.job.publish(
+            SSEEvent(
+                DONE,
+                {
+                    "session_id": self.job.session_id,
+                    "finish_reason": (
+                        self.finish_reason if not self.job.abort_event.is_set() else "aborted"
+                    ),
+                    "total_cost": self.total_cost,
+                },
+            )
+        )
+
+        # Auto-generate title on first turn
+        if self.is_first_turn:
+            title = await _auto_title(
+                self.job.session_id,
+                self.first_user_text,
+                session_factory=self.session_factory,
+                provider_registry=self.provider_registry,
+                agent_registry=self.agent_registry,
+                model_id=self.model_id,
+            )
+            if not title:
+                title = self.first_user_text.strip()[:60]
+                if title:
+                    try:
+                        async with self.session_factory() as db:
+                            async with db.begin():
+                                await update_session_title(db, self.job.session_id, title)
+                    except Exception:
+                        logger.warning(
+                            "Failed to persist fallback title for %s", self.job.session_id
+                        )
+
+    # ------------------------------------------------------------------
+    # Shared helpers (called by SessionProcessor on agent switch)
+    # ------------------------------------------------------------------
+
+    def rebuild_permissions_and_prompt(self) -> None:
+        """Rebuild merged permissions and system prompt after an agent switch.
+
+        Called by SessionProcessor when the plan tool switches agents.
+        """
+        self.merged_permissions = merge_rulesets(
+            GLOBAL_DEFAULTS,
+            self.agent.permissions,
+            self.preset_permissions,
+            self.session_permissions,
+        )
+        self.system_prompt = build_system_prompt(
+            self.agent,
+            directory=self.directory,
+            workspace=self.workspace,
+            fts_status=self.fts_status,
+        )

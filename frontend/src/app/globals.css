@@ -1,0 +1,673 @@
+@import "tailwindcss";
+
+/* ─── OpenYak — Pure Black & White ─── */
+
+:root {
+  /* Surface — pure whites */
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F5F5F5;
+  --surface-tertiary: #EBEBEB;
+  --surface-chat: #FAFAFA;
+
+  /* Text — pure darks */
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-tertiary: #A3A3A3;
+
+  /* Border — pure grays */
+  --border-default: #E5E5E5;
+  --border-heavy: #D4D4D4;
+
+  /* Code block surfaces (light theme uses dark code blocks like ChatGPT/Claude) */
+  --code-block-bg: #2F2F2F;
+  --code-block-header: #3B3B3B;
+  --code-block-border: #4A4A4A;
+  --code-block-text: #D4D4D4;
+  --code-block-text-hover: #FFFFFF;
+  --code-block-success: #4EC9B0;
+
+  /* Brand — Pure Black */
+  --brand-primary: #171717;
+  --brand-primary-hover: #404040;
+  --brand-primary-text: #FFFFFF;
+
+  /* Semantic */
+  --color-success: #22C55E;
+  --color-warning: #EAB308;
+  --color-destructive: #EF4444;
+
+  /* Sidebar */
+  --sidebar-bg: #FAFAFA;
+  --sidebar-hover: #F0F0F0;
+  --sidebar-active: #E8E8E8;
+
+  /* User message bubble */
+  --user-bubble-bg: #F7F7F8;
+
+  /* Ring */
+  --ring: #171717;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+
+  /* Switch */
+  --switch-checked: #171717;
+
+  /* Tool colors */
+  --tool-pending: #EAB308;
+  --tool-running: #171717;
+  --tool-completed: #22C55E;
+  --tool-error: #EF4444;
+}
+
+.dark {
+  /* Surface — warm brown-tinted blacks (aligned with website dark theme) */
+  --surface-primary: #0e0d0a;
+  --surface-secondary: #171511;
+  --surface-tertiary: #23201a;
+  --surface-chat: #0e0d0a;
+
+  /* Text — warm-tinted for readability */
+  --text-primary: #f2efe9;
+  --text-secondary: #b9b3a7;
+  --text-tertiary: #8c8c8c;
+
+  /* Border — warm tints */
+  --border-default: #2b2620;
+  --border-heavy: #3d362d;
+
+  /* Code block surfaces (dark theme keeps same dark code blocks) */
+  --code-block-bg: #1a1815;
+  --code-block-header: #23201a;
+  --code-block-border: #3d362d;
+  --code-block-text: #D4D4D4;
+  --code-block-text-hover: #FFFFFF;
+  --code-block-success: #4EC9B0;
+
+  /* Brand — warm white */
+  --brand-primary: #f2efe9;
+  --brand-primary-hover: #FFFFFF;
+  --brand-primary-text: #0e0d0a;
+
+  /* Semantic */
+  --color-success: #22C55E;
+  --color-warning: #EAB308;
+  --color-destructive: #EF4444;
+
+  /* Sidebar — darkest layer for clear panel separation */
+  --sidebar-bg: #080705;
+  --sidebar-hover: #171511;
+  --sidebar-active: #23201a;
+
+  /* User message bubble — distinct from background */
+  --user-bubble-bg: #1c1a15;
+
+  /* Ring */
+  --ring: #f2efe9;
+
+  /* Switch */
+  --switch-checked: #827a6d;
+
+  /* Shadows — stronger for depth on dark surfaces */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.55), 0 4px 8px -4px rgba(0, 0, 0, 0.45);
+}
+
+/* ─── Base Styles ─── */
+
+@layer base {
+  * {
+    border-color: var(--border-default);
+  }
+
+  body {
+    background: var(--surface-primary);
+    color: var(--text-primary);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ─── Scrollbar Styling ─── */
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-heavy);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+  }
+
+  /* ─── Focus Ring (Accessibility) ─── */
+
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Hide Scrollbar Utility ─── */
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Code Block ─── */
+
+pre code {
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* ─── Syntax Highlighting (Light Theme) ─── */
+
+:root {
+  --code-bg: #1E1E1E;
+  --code-text: #D4D4D4;
+  --code-comment: #6A9955;
+  --code-keyword: #569CD6;
+  --code-string: #CE9178;
+  --code-function: #DCDCAA;
+  --code-variable: #9CDCFE;
+  --code-number: #B5CEA8;
+  --code-operator: #D4D4D4;
+  --code-class: #4EC9B0;
+  --code-tag: #569CD6;
+  --code-attr-name: #9CDCFE;
+  --code-attr-value: #CE9178;
+  --code-builtin: #4EC9B0;
+  --code-regex: #D16969;
+  --code-deleted: #F44747;
+  --code-inserted: #89D185;
+}
+
+.dark {
+  --code-bg: #1E1E1E;
+  --code-text: #D4D4D4;
+  --code-comment: #6A9955;
+  --code-keyword: #569CD6;
+  --code-string: #CE9178;
+  --code-function: #DCDCAA;
+  --code-variable: #9CDCFE;
+  --code-number: #B5CEA8;
+  --code-operator: #D4D4D4;
+  --code-class: #4EC9B0;
+  --code-tag: #569CD6;
+  --code-attr-name: #9CDCFE;
+  --code-attr-value: #CE9178;
+  --code-builtin: #4EC9B0;
+  --code-regex: #D16969;
+  --code-deleted: #F44747;
+  --code-inserted: #89D185;
+}
+
+/* Highlight.js Theme — VS Code Dark+ inspired */
+.hljs {
+  color: var(--code-text);
+  background: transparent;
+}
+
+/* Comments */
+.hljs-comment,
+.hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+/* Keywords */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: var(--code-keyword);
+}
+
+/* Strings */
+.hljs-string {
+  color: var(--code-string);
+}
+
+/* Functions */
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: var(--code-function);
+}
+
+/* Variables */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--code-variable);
+}
+
+/* Numbers */
+.hljs-number,
+.hljs-built_in {
+  color: var(--code-number);
+}
+
+/* Classes, Types */
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in {
+  color: var(--code-class);
+}
+
+/* HTML/XML Tags */
+.hljs-tag {
+  color: var(--code-tag);
+}
+
+/* HTML/XML Attribute Names */
+.hljs-attr,
+.hljs-attribute {
+  color: var(--code-attr-name);
+}
+
+/* Operators */
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--code-operator);
+}
+
+/* Constants, Built-ins */
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--code-builtin);
+}
+
+/* RegExp */
+.hljs-regexp {
+  color: var(--code-regex);
+}
+
+/* Diff additions */
+.hljs-addition {
+  color: var(--code-inserted);
+  background-color: rgba(137, 209, 133, 0.1);
+}
+
+/* Diff deletions */
+.hljs-deletion {
+  color: var(--code-deleted);
+  background-color: rgba(244, 71, 71, 0.1);
+}
+
+/* Emphasis */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+/* Strong */
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* ─── Markdown Prose ─── */
+
+.prose {
+  max-width: none;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.prose p {
+  margin-bottom: 1em;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin-bottom: 0.25em;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose h1 { font-size: 1.5em; }
+.prose h2 { font-size: 1.25em; }
+.prose h3 { font-size: 1.1em; }
+
+.prose pre {
+  /* Background and styling handled by code block component */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fade hint for horizontally scrollable code blocks on small screens */
+@media (max-width: 640px) {
+  .prose pre {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  }
+  .prose pre:hover,
+  .prose pre:active {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
+.prose code:not(pre code) {
+  background: var(--surface-tertiary);
+  padding: 0.15em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+.prose a {
+  color: var(--brand-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--border-heavy);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--text-secondary);
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 1.5em 0;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border-default);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.prose th {
+  background: var(--surface-secondary);
+  font-weight: 600;
+}
+
+/* Allow text wrapping in table cells on wider screens */
+@media (min-width: 640px) {
+  .prose th,
+  .prose td {
+    white-space: normal;
+  }
+}
+
+/* ─── Animations ─── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Streaming cursor — blinks at end of last paragraph */
+.streaming-cursor > *:last-child {
+  display: inline !important;
+}
+.streaming-cursor::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--text-primary);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink-cursor 1s step-end infinite;
+}
+
+@keyframes progress-slide {
+  0% { width: 0%; margin-left: 0%; }
+  50% { width: 40%; margin-left: 30%; }
+  100% { width: 0%; margin-left: 100%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--text-tertiary) 0%,
+    var(--text-secondary) 40%,
+    var(--text-tertiary) 60%,
+    var(--text-tertiary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+.shimmer-icon {
+  animation: shimmer-opacity 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── Mermaid Diagrams ─── */
+
+.mermaid-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100px;
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Override mermaid default styles to match theme */
+.mermaid-container .node rect,
+.mermaid-container .node circle,
+.mermaid-container .node polygon {
+  stroke: var(--border-heavy) !important;
+}
+
+.mermaid-container text {
+  fill: var(--text-primary) !important;
+}
+
+.mermaid-container .edgeLabel {
+  background-color: var(--surface-primary) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Ensure good contrast on hover/focus */
+.mermaid-container .node:hover rect,
+.mermaid-container .node:hover circle {
+  filter: brightness(1.1);
+}
+
+/* ─── DOCX Preview ─── */
+.docx-preview-container {
+  padding: 16px;
+  min-height: 100%;
+}
+.docx-preview-container .docx-wrapper {
+  background: white !important;
+  padding: 0 !important;
+}
+.docx-preview-container .docx-wrapper > section.docx {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1) !important;
+  margin-bottom: 16px;
+  padding: 40px 50px !important;
+}
+
+/* ─── XLSX Preview ─── */
+.xlsx-preview-container {
+  padding: 0;
+  min-height: 100%;
+}
+.xlsx-preview-container table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-primary);
+}
+.xlsx-preview-container th,
+.xlsx-preview-container td {
+  border: 1px solid var(--border-default);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.xlsx-preview-container th {
+  background: var(--surface-tertiary);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.xlsx-preview-container tr:nth-child(even) {
+  background: var(--surface-secondary);
+}
+.xlsx-preview-container tr:hover {
+  background: var(--surface-tertiary);
+}
+
+/* ─── CSV Preview ─── */
+.csv-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-primary);
+}
+.csv-table th,
+.csv-table td {
+  border: 1px solid var(--border-default);
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.csv-table th {
+  background: var(--surface-tertiary);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  user-select: none;
+}
+.csv-table th:hover {
+  background: var(--surface-secondary);
+}
+.csv-table tr:nth-child(even) {
+  background: var(--surface-secondary);
+}
+.csv-table tbody tr:hover {
+  background: var(--surface-tertiary);
+}
+
+/* ─── Reduced Motion (Accessibility) ─── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .streaming-cursor::after {
+    animation: none;
+  }
+
+  .shimmer-text {
+    animation: none;
+    -webkit-text-fill-color: var(--text-secondary);
+  }
+}
