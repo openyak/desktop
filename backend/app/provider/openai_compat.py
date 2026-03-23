@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Any, AsyncIterator
 
+import httpx
 from openai import AsyncOpenAI
 
 from app.provider.base import BaseProvider
@@ -103,7 +104,7 @@ class OpenAICompatProvider(BaseProvider):
             api_key=api_key,
             base_url=base_url,
             default_headers=default_headers or {},
-            timeout=120.0,  # 2min total — prevents infinite hang on proxy issues
+            timeout=httpx.Timeout(300.0, connect=30.0),  # 5min read (free models cold-start), 30s connect
         )
 
     async def stream_chat(
@@ -241,7 +242,7 @@ class OpenAICompatProvider(BaseProvider):
                 )
 
         except Exception as e:
-            logger.error("Stream error: %s", e)
+            logger.error("Stream error for model %s: %s", model, e, exc_info=True)
             yield StreamChunk(type="error", data={"message": str(e)})
 
     def _build_messages(

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ArrowLeft, Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,29 @@ export default function RemotePage() {
   const [fullToken, setFullToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [permMode, setPermMode] = useState("auto");
+  const [tunnelChanged, setTunnelChanged] = useState(false);
+  const prevTunnelUrl = useRef<string | null>(null);
 
   const fetchStatus = async () => {
     try {
       const data = await api.get<typeof status>(API.REMOTE.STATUS);
       setStatus(data);
-      if (data) setPermMode(data.permission_mode);
+      if (data) {
+        setPermMode(data.permission_mode);
+
+        // Detect tunnel URL change — show warning to re-scan QR
+        if (prevTunnelUrl.current !== null && data.tunnel_url && data.tunnel_url !== prevTunnelUrl.current) {
+          setTunnelChanged(true);
+          // Auto-refresh QR code when URL changes
+          if (showQr) {
+            try {
+              const backendUrl = IS_DESKTOP ? await getBackendUrl() : "";
+              setQrUrl(`${backendUrl}${API.REMOTE.QR}?t=${Date.now()}`);
+            } catch {}
+          }
+        }
+        prevTunnelUrl.current = data.tunnel_url ?? null;
+      }
     } catch {
       // Remote API not available
     } finally {
@@ -41,13 +58,22 @@ export default function RemotePage() {
 
   useEffect(() => { fetchStatus(); }, []);
 
+  // Poll status every 30s to detect tunnel restarts
+  useEffect(() => {
+    if (!status?.enabled) return;
+    const interval = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(interval);
+  }, [status?.enabled]);
+
   const handleToggle = async () => {
     if (!status) return;
     setToggling(true);
+    setTunnelChanged(false);
     try {
       if (status.enabled) {
         await api.post(API.REMOTE.DISABLE);
         setShowQr(false); setQrUrl(null); setFullToken(null);
+        prevTunnelUrl.current = null;
       } else {
         const result = await api.post<{ token: string; tunnel_url: string | null }>(API.REMOTE.ENABLE);
         setFullToken(result.token);
@@ -73,6 +99,7 @@ export default function RemotePage() {
       const backendUrl = IS_DESKTOP ? await getBackendUrl() : "";
       setQrUrl(`${backendUrl}${API.REMOTE.QR}?t=${Date.now()}`);
       setShowQr(true);
+      setTunnelChanged(false);
     } catch {}
   };
 
@@ -113,6 +140,23 @@ export default function RemotePage() {
         ) : (
           <div className="space-y-6">
             <p className="text-xs text-[var(--text-secondary)]">{t("remoteDesc")}</p>
+
+            {/* Tunnel URL changed warning */}
+            {tunnelChanged && status?.enabled && (
+              <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 animate-slide-up">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Tunnel URL changed</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    The tunnel was restarted with a new URL. Mobile devices need to rescan the QR code to reconnect.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={handleShowQr}>
+                  <QrCode className="h-3 w-3 mr-1" />
+                  Show QR
+                </Button>
+              </div>
+            )}
 
             {/* Enable/Disable toggle */}
             <div className="flex items-center justify-between rounded-lg border border-[var(--border-default)] p-3">

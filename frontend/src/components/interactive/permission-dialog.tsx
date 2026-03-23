@@ -5,6 +5,7 @@ import { ShieldAlert, ShieldCheck, ShieldX, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { PERMISSION_TIMEOUT } from "@/lib/constants";
+import { isRemoteMode } from "@/lib/remote-connection";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { PermissionRequest } from "@/types/streaming";
 
@@ -86,6 +87,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
   const savePermissionRule = useSettingsStore((s) => s.savePermissionRule);
   const displayTool = permission.tool || permission.permission || "this action";
   const details = getToolExplanation(permission.tool || permission.permission);
+  const isMobile = isRemoteMode();
 
   useRequestNotificationPermission();
 
@@ -144,6 +146,101 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
   // Show warning when < 60s remaining
   const isUrgent = remainingSec <= 60 && !expired;
 
+  // Mobile: bottom-sheet style anchored to bottom
+  if (isMobile) {
+    return (
+      <div className="px-3 pb-[max(env(safe-area-inset-bottom),8px)]">
+        <div className="rounded-2xl border-2 border-[var(--color-warning)]/40 bg-[var(--surface-primary)] shadow-lg p-4 animate-slide-up">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-[var(--color-warning)]" />
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                  Permission Required
+                </h3>
+              </div>
+              {!expired && (
+                <span className={`flex items-center gap-1 text-xs tabular-nums ${
+                  isUrgent ? "text-[var(--color-destructive)]" : "text-[var(--text-tertiary)]"
+                }`}>
+                  <Clock className="h-3.5 w-3.5" />
+                  {timeStr}
+                </span>
+              )}
+            </div>
+
+            {expired ? (
+              <p className="text-sm text-[var(--color-destructive)]">
+                This permission request has timed out.
+              </p>
+            ) : (
+              <div className="text-sm text-[var(--text-secondary)] space-y-1">
+                <p>
+                  Wants to use <span className="font-medium text-[var(--text-primary)]">{displayTool}</span>
+                </p>
+                <p className="text-xs">{details.action} &middot; {details.impact}</p>
+              </div>
+            )}
+
+            {!expired && permission.patterns.length > 0 && (
+              <div className="rounded-xl bg-[var(--surface-secondary)] border border-[var(--border-default)] p-3">
+                <p className="text-[10px] text-[var(--text-tertiary)] uppercase font-semibold mb-1">
+                  Details
+                </p>
+                <div className="space-y-0.5">
+                  {permission.patterns.map((p, i) => (
+                    <p key={i} className="text-sm text-[var(--text-secondary)] break-all">
+                      {p}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!expired && (
+              <>
+                <div className="flex items-center gap-2 py-2 border-t border-[var(--border-default)]">
+                  <Switch
+                    checked={rememberChoice}
+                    onCheckedChange={setRememberChoice}
+                    id="remember-choice-mobile"
+                  />
+                  <label
+                    htmlFor="remember-choice-mobile"
+                    className="text-sm text-[var(--text-secondary)] cursor-pointer select-none"
+                  >
+                    Remember for <span className="font-medium text-[var(--text-primary)]">{displayTool}</span>
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleRespond(false)}
+                    disabled={submitting}
+                    className="flex-1 h-12 flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--border-default)] bg-[var(--surface-secondary)] text-[var(--text-primary)] text-base font-medium active:scale-[0.97] transition-all disabled:opacity-50"
+                  >
+                    <ShieldX className="h-5 w-5" />
+                    Deny
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRespond(true)}
+                    disabled={submitting}
+                    className="flex-1 h-12 flex items-center justify-center gap-2 rounded-xl bg-[var(--text-primary)] text-[var(--surface-primary)] text-base font-medium active:scale-[0.97] transition-all disabled:opacity-50"
+                  >
+                    <ShieldCheck className="h-5 w-5" />
+                    Allow
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop layout (unchanged)
   return (
     <div className="px-4 pb-3">
       <div className="mx-auto max-w-3xl xl:max-w-4xl">

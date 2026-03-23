@@ -51,7 +51,6 @@ from app.session.retry import (
     sleep_with_abort,
 )
 from app.session.system_prompt import build_system_prompt
-from app.session.title import generate_title
 from app.streaming.events import (
     AGENT_ERROR,
     DONE,
@@ -1324,29 +1323,3 @@ async def _persist_tool_error(
             )
 
 
-async def _auto_title(
-    session_id: str,
-    first_user_text: str,
-    *,
-    session_factory: async_sessionmaker[AsyncSession],
-    provider_registry: ProviderRegistry,
-    agent_registry: AgentRegistry,
-    model_id: str | None,
-) -> str | None:
-    """Generate and persist a session title. Returns the title or None."""
-    try:
-        title = await generate_title(
-            first_user_text,
-            provider_registry=provider_registry,
-            agent_registry=agent_registry,
-            model_id=model_id,
-        )
-        if title:
-            async with session_factory() as db:
-                async with db.begin():
-                    await update_session_title(db, session_id, title)
-            logger.info("Auto-titled session %s: %s", session_id, title)
-            return title
-    except Exception as e:
-        logger.warning("Failed to auto-title session %s: %s", session_id, e)
-    return None

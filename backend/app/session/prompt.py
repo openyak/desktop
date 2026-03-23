@@ -38,6 +38,7 @@ from app.streaming.events import (
     AGENT_ERROR,
     DONE,
     STEP_START,
+    TITLE_UPDATE,
     SSEEvent,
 )
 from app.streaming.manager import GenerationJob
@@ -549,7 +550,7 @@ class SessionPrompt:
 
     async def _post_loop(self) -> None:
         """Cleanup, persist accumulated cost/tokens, publish DONE, auto-title."""
-        from app.session.processor import _delete_empty_assistant_messages, _auto_title
+        from app.session.processor import _delete_empty_assistant_messages
 
         await _delete_empty_assistant_messages(self.session_factory, self.job.session_id)
 
@@ -590,27 +591,21 @@ class SessionPrompt:
             )
         )
 
-        # Auto-generate title on first turn
+        # Set title on first turn — use first user message directly.
+        # Avoids an extra LLM call that wastes tokens and triggers rate
+        # limits on free-tier models (e.g., MiniMax M2.5:free).
         if self.is_first_turn:
-            title = await _auto_title(
-                self.job.session_id,
-                self.first_user_text,
-                session_factory=self.session_factory,
-                provider_registry=self.provider_registry,
-                agent_registry=self.agent_registry,
-                model_id=self.model_id,
-            )
-            if not title:
-                title = self.first_user_text.strip()[:60]
-                if title:
-                    try:
-                        async with self.session_factory() as db:
-                            async with db.begin():
-                                await update_session_title(db, self.job.session_id, title)
-                    except Exception:
-                        logger.warning(
-                            "Failed to persist fallback title for %s", self.job.session_id
-                        )
+            title = self.first_user_text.strip()[:60]
+            if title:
+                try:
+                    async with self.session_factory() as db:
+                        async with db.begin():
+                            await update_session_title(db, self.job.session_id, title)
+                    self.job.publish(SSEEvent(TITLE_UPDATE, {"title": title}))
+                except Exception:
+                    logger.warning(
+                        "Failed to persist title for %s", self.job.session_id
+                    )
 
     # ------------------------------------------------------------------
     # Shared helpers (called by SessionProcessor on agent switch)

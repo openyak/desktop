@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChatView } from "@/components/chat/chat-view";
 import { isRemoteMode } from "@/lib/remote-connection";
+import { useChatStore } from "@/stores/chat-store";
 
 function TaskClientInner({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -18,6 +19,18 @@ function TaskClientInner({ sessionId }: { sessionId: string }) {
   const resolvedId = sessionId === "_"
     ? searchParams.get("sessionId") ?? ""
     : sessionId;
+
+  // If navigated with a stream_id (e.g., from new task page), seed the
+  // chatStore immediately so useSSE activates without waiting for the poll.
+  const streamIdParam = searchParams.get("stream_id");
+  useEffect(() => {
+    if (resolvedId && streamIdParam) {
+      const chatState = useChatStore.getState();
+      if (!chatState.isGenerating || chatState.streamId !== streamIdParam) {
+        chatState.startGeneration(streamIdParam, resolvedId);
+      }
+    }
+  }, [resolvedId, streamIdParam]);
 
   if (!resolvedId) return null;
 

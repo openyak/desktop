@@ -28,7 +28,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Platform-sponsored free models: virtual_id → (real_openrouter_id, display_name)
 # These appear as free models in the UI but route to paid models under the hood.
 PLATFORM_FREE_MODELS: dict[str, tuple[str, str]] = {
-    "openyak/best-free": ("minimax/minimax-m2.5:free", "OpenYak Best Free"),
+    "openyak/best-free": ("openrouter/free", "OpenYak Best Free"),
 }
 
 # Reverse lookup: real_id → set of virtual_ids (built from PLATFORM_FREE_MODELS)
@@ -65,6 +65,9 @@ class OpenRouterProvider(OpenAICompatProvider):
         self._models_cache: list[ModelInfo] | None = None
         self._cache_timestamp: float | None = None  # Unix timestamp of last cache update
         self._cache_ttl_seconds = cache_ttl_hours * 3600  # Convert hours to seconds
+        # Models that support reasoning — populated from list_models() cache.
+        # Used to avoid sending unsupported `reasoning` param to models like MiniMax.
+        self._reasoning_models: set[str] = set()
 
     @property
     def id(self) -> str:
@@ -186,6 +189,8 @@ class OpenRouterProvider(OpenAICompatProvider):
 
         self._models_cache = models
         self._cache_timestamp = time.time()  # Record when cache was updated
+        # Update reasoning model set for stream_chat filtering
+        self._reasoning_models = {m.id for m in models if m.capabilities.reasoning}
         logger.info(
             "Loaded %d models from OpenRouter (cache valid for %.1f hours)",
             len(models),
@@ -243,8 +248,9 @@ class OpenRouterProvider(OpenAICompatProvider):
         # Prioritize high-throughput providers
         merged_extra["provider"] = {"sort": "throughput"}
 
-        # Enable reasoning if configured
-        if self._enable_reasoning:
+        # Enable reasoning only for models that support it.
+        # Sending this to models like MiniMax M2.5 causes stream errors.
+        if self._enable_reasoning and model in self._reasoning_models:
             merged_extra["reasoning"] = {"enabled": True}
 
         if extra_body:

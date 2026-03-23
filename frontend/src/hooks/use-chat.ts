@@ -11,6 +11,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useBillingStore } from "@/stores/billing-store";
 import { useSSE } from "./use-sse";
+import { useRemoteGenerationSync } from "./use-remote-generation-sync";
 import type { InfiniteData } from "@tanstack/react-query";
 import type { FileAttachment, PromptResponse, RespondRequest } from "@/types/chat";
 import type { MessageResponse, PaginatedMessages } from "@/types/message";
@@ -39,6 +40,9 @@ export function useChat(currentSessionId?: string) {
 
   // SSE connection — activates when streamId is set
   useSSE(streamId);
+
+  // Detect generations started by other clients (e.g., mobile)
+  useRemoteGenerationSync(currentSessionId);
 
   const sendMessage = useCallback(
     async (text: string, attachments?: FileAttachment[]): Promise<boolean> => {

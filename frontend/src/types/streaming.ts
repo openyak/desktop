@@ -23,6 +23,8 @@ export const SSE_EVENTS = {
   COMPACTION_ERROR: "compaction-error",
   PLAN_REVIEW: "plan-review",
   MODEL_LOADING: "model-loading",
+  PERMISSION_RESOLVED: "permission-resolved",
+  QUESTION_RESOLVED: "question-resolved",
 } as const;
 
 /** SSE event payload — mirrors backend app/schemas/streaming.py SSEEventData */

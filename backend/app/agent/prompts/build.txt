@@ -11,7 +11,7 @@ The current date and time are provided in the Environment section. You MUST use 
 - When searching the web, ALWAYS include the current year in time-sensitive queries
 - When the user asks about "this week", "today", "recently", "current", etc., interpret relative to the current date
 - NEVER assume dates from your training data — always check the Environment section for the current year
-- Example: user asks "纳斯达克这周走势" and current year is 2026 → search "纳斯达克 2026年3月 走势", NOT without the year
+- Example: user asks "NASDAQ trend this week" and current year is 2026 → search "NASDAQ March 2026 trend", NOT without the year
 </time_awareness>
 
 <core_principle>

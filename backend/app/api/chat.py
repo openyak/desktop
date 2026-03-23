@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.schemas.chat import AbortRequest, EditAndResendRequest, PromptRequest, PromptResponse, RespondRequest
 from app.session.manager import delete_messages_after, update_message_file_parts, update_message_text
 from app.session.processor import run_generation
-from app.streaming.events import AGENT_ERROR, SSEEvent
+from app.streaming.events import AGENT_ERROR, PERMISSION_RESOLVED, QUESTION_RESOLVED, SSEEvent
 from app.streaming.manager import GenerationJob, StreamManager
 from app.utils.id import generate_ulid
 
@@ -228,6 +228,15 @@ async def respond_to_prompt(request: Request, body: RespondRequest) -> dict:
     if job is None:
         return {"status": "not_found"}
     job.submit_response(body.call_id, body.response)
+
+    # Broadcast a resolved event so other connected clients (e.g., the other
+    # end of a PC/mobile session) can dismiss their prompt UI.
+    source = (request.state.source if hasattr(request, "state") and hasattr(request.state, "source") else "local")
+    if isinstance(body.response, bool):
+        job.publish(SSEEvent(PERMISSION_RESOLVED, {"call_id": body.call_id, "allowed": body.response, "source": source}))
+    else:
+        job.publish(SSEEvent(QUESTION_RESOLVED, {"call_id": body.call_id, "source": source}))
+
     return {"status": "submitted"}
 
 

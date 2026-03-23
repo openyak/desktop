@@ -380,6 +380,24 @@ export function useSSE(streamId: string | null) {
       }
     });
 
+    // Interactive resolved: another client (PC or mobile) already responded
+    // to a permission or question prompt — dismiss the local UI.
+    client.on(SSE_EVENTS.PERMISSION_RESOLVED, (data, id) => {
+      persistedLastEventId = id;
+      const pending = store.getState().pendingPermission;
+      if (pending && data.call_id === pending.callId) {
+        store.getState().clearPermissionRequest();
+      }
+    });
+
+    client.on(SSE_EVENTS.QUESTION_RESOLVED, (data, id) => {
+      persistedLastEventId = id;
+      const pending = store.getState().pendingQuestion;
+      if (pending && data.call_id === pending.callId) {
+        store.getState().clearQuestion();
+      }
+    });
+
     // Interactive: Plan Review
     client.on(SSE_EVENTS.PLAN_REVIEW, (data, id) => {
       persistedLastEventId = id;
@@ -491,11 +509,8 @@ export function useSSE(streamId: string | null) {
         }, 500);
       }
 
-      // Delay sessions refetch — title generation runs after DONE on the backend,
-      // so the title may not be in the DB yet. Give it time to complete and persist.
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-      }, 2000);
+      // Refetch sessions to pick up the title (set synchronously before DONE now)
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
 
       // Refresh billing balance from OpenYak proxy after each generation
       const auth = useAuthStore.getState();
