@@ -100,19 +100,27 @@ export function MessageList({
   // there's a 1-frame blank flash between StreamingMessage unmounting and
   // the DB messages mounting.
   const wasGeneratingRef = useRef(false);
+  const prevMessageCountRef = useRef(messages?.length ?? 0);
   const [showStreamingFallback, setShowStreamingFallback] = useState(false);
 
   useEffect(() => {
     if (isGenerating) {
       wasGeneratingRef.current = true;
+      prevMessageCountRef.current = messages?.length ?? 0;
       setShowStreamingFallback(false);
     } else if (wasGeneratingRef.current) {
       wasGeneratingRef.current = false;
       setShowStreamingFallback(true);
-      const timer = setTimeout(() => setShowStreamingFallback(false), 800);
+      const timer = setTimeout(() => setShowStreamingFallback(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [isGenerating]);
+
+  useEffect(() => {
+    if (showStreamingFallback && (messages?.length ?? 0) > prevMessageCountRef.current) {
+      setShowStreamingFallback(false);
+    }
+  }, [messages?.length, showStreamingFallback]);
 
   // Reverse infinite scroll: observe top sentinel to load older messages
   useEffect(() => {

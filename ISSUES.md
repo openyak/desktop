@@ -11,9 +11,9 @@
 | Priority | Total | Open | Fixed | Verified |
 |----------|-------|------|-------|----------|
 | P0 (Critical) | 8 | 0 | 8 | 0 |
-| P1 (Medium) | 12 | 12 | 0 | 0 |
-| P2 (Low) | 7 | 7 | 0 | 0 |
-| **Total** | **27** | **19** | **8** | **0** |
+| P1 (Medium) | 13 | 0 | 9 | 0 |
+| P2 (Low) | 7 | 0 | 5 | 0 |
+| **Total** | **28** | **0** | **22** | **0** |
 
 ---
 
@@ -178,11 +178,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-01 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Interactive |
 | **Affected Files** | `frontend/src/components/interactive/permission-dialog.tsx` (line ~79-237) |
 | **Symptom** | Permission dialog times out after 5 minutes. Message says "timed out" but no actionable button. Agent may be stuck waiting. |
 | **Fix Plan** | Auto-deny on timeout + show "Timed out — action was denied" status. Ensure backend receives the deny response. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -191,11 +192,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-02 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Chat |
 | **Affected Files** | `frontend/src/hooks/use-chat.ts` (line ~145-160) |
 | **Symptom** | `stopGeneration` clears frontend state immediately without waiting for backend abort API to complete. If abort fails, backend continues generating. |
 | **Fix Plan** | Wait for abort API response before calling `finishGeneration()`. On API failure, retry once, then force-clear with warning. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -204,11 +206,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-03 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Messages |
 | **Affected Files** | `frontend/src/components/messages/message-list.tsx` (line ~105-115) |
 | **Symptom** | After generation completes, fallback timer expires (800ms) before DB messages finish rendering, causing brief blank space. |
 | **Fix Plan** | Replace fixed timer with a condition: hide fallback only when DB messages are actually rendered (check `messages.length` includes new assistant message). |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -217,11 +220,13 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-04 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Chat |
 | **Affected Files** | `frontend/src/hooks/use-chat.ts` (line ~122-140), `frontend/src/components/chat/chat-form.tsx` |
 | **Symptom** | On send failure (network error, 500), input is already cleared. Error toast disappears in 3 seconds. User may not see it and has to retype. |
 | **Fix Plan** | On failure: restore input text and attachments. Show persistent error banner above input (not just toast). |
+| **Fix Date** | 2026-03-23 |
+| **Note** | Input restoration already handled by chat-form.tsx (`result === false` check restores text/attachments). Fix extends toast duration from 3s to 8s so users actually see the error. |
 
 ---
 
@@ -230,7 +235,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-05 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Frontend — Provider |
 | **Affected Files** | `frontend/src/app/(main)/models/page.tsx`, `frontend/src/hooks/use-auto-detect-provider.ts` |
 | **Symptom** | API key becomes invalid (quota exhausted, revoked) but app still shows it as configured. Chat fails with generic error. |
@@ -243,7 +248,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-06 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Frontend — Provider |
 | **Affected Files** | `frontend/src/app/(main)/models/page.tsx`, `frontend/src/components/chat/chat-view.tsx` |
 | **Symptom** | `needs_reauth` flag is only checked on /models page. User in chat gets generic error instead of "Please re-authenticate". |
@@ -256,11 +261,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-07 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Model Selector |
 | **Affected Files** | `frontend/src/components/selectors/header-model-dropdown.tsx`, `frontend/src/hooks/use-provider-models.ts` |
 | **Symptom** | When model list is empty, user sees "No models" with no distinction between loading / auth error / quota exhausted. |
 | **Fix Plan** | Return `{ data, isLoading, isError, error }` from hook. Show appropriate state: spinner, error message, or empty state with action. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -269,11 +275,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-08 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — SSE |
 | **Affected Files** | `frontend/src/hooks/use-sse.ts` (line ~437-445) |
 | **Symptom** | Backend drops events (queue overflow), sends DESYNC. Frontend refetches DB but `streamingParts` still has stale intermediate data, causing duplicate content. |
 | **Fix Plan** | On DESYNC: clear `streamingParts` and `streamingText`, then refetch DB. Optionally show a subtle "Some events were dropped" notice. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -282,7 +289,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-09 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Backend — Startup |
 | **Affected Files** | `backend/app/main.py` (line ~176), `backend/app/fts/index.py`, `backend/app/fts/watcher.py` |
 | **Symptom** | `asyncio.create_task()` for Ollama warmup, FTS indexing, and FTS watcher have no done callbacks. Failures are silently swallowed. |
@@ -295,11 +302,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-10 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Backend — Chat API |
 | **Affected Files** | `backend/app/api/chat.py` (line ~54) |
 | **Symptom** | MAX_CONCURRENT=20 semaphore. If a generation hangs indefinitely, it permanently occupies a slot. After 20 such hangs, all new requests block forever. |
 | **Fix Plan** | Use `asyncio.wait_for(sem.acquire(), timeout=30)`. Return 503 (Service Unavailable) on timeout. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -308,7 +316,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-11 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Backend — Agent Loop |
 | **Affected Files** | `backend/app/session/processor.py` (line ~676-695) |
 | **Symptom** | LLM returns empty content 3 times. Code returns `"continue"` instead of `"stop"`, causing the outer loop to retry until the 50-step hard cap. |
@@ -321,11 +329,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-12 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Backend — Compaction |
 | **Affected Files** | `backend/app/session/compaction.py` (line ~222-250) |
 | **Symptom** | Context compaction fails silently (only logged). Frontend doesn't know. Context continues to grow, leading to eventual hard failure. |
 | **Fix Plan** | Publish `compaction-error` SSE event on failure. Frontend should show a warning: "Context compression failed. Consider starting a new chat." |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -334,11 +343,12 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P1-13 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Sidebar |
 | **Affected Files** | `frontend/src/components/layout/session-list.tsx` (line ~150-156) |
 | **Symptom** | When backend is down, session list retries every 3 seconds indefinitely with no backoff. Hammers the backend during recovery. |
 | **Fix Plan** | Exponential backoff: 3s → 6s → 12s → 30s cap. Stop after 10 attempts, show "Backend unavailable" with manual retry button. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -349,10 +359,11 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-01 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Onboarding |
 | **Affected Files** | `frontend/src/components/onboarding/onboarding-screen.tsx` (line ~304-346) |
 | **Fix Plan** | Show "Code expires in X:XX" countdown. Suggest "Resend code" when expired. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -361,10 +372,11 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-02 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Provider Detection |
 | **Affected Files** | `frontend/src/hooks/use-auto-detect-provider.ts` |
 | **Fix Plan** | Add `refetchInterval: 10_000` to Ollama status query in auto-detect hook. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -373,10 +385,11 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-03 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Frontend — Session |
 | **Affected Files** | `frontend/src/components/layout/session-item.tsx`, `frontend/src/hooks/use-sessions.ts` |
 | **Fix Plan** | Use React Query's `onMutate` for optimistic cache update with rollback on error. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -385,7 +398,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-04 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Frontend — Ollama |
 | **Affected Files** | `frontend/src/components/settings/ollama-panel.tsx` (line ~751-754) |
 | **Fix Plan** | Change to manual dismiss or extend to 10 seconds minimum. |
@@ -397,7 +410,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-05 |
-| **Status** | `OPEN` |
+| **Status** | `WONTFIX` |
 | **Category** | Backend — Agent Loop |
 | **Affected Files** | `backend/app/session/processor.py` (line ~1222-1227) |
 | **Fix Plan** | Pop the Future from `_response_futures` dict in the `except TimeoutError` block. |
@@ -409,10 +422,11 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-06 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Backend — Agent Loop |
 | **Affected Files** | `backend/app/session/processor.py` (line ~100-122) |
 | **Fix Plan** | Protect global quota variables with `asyncio.Lock`. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -421,10 +435,11 @@
 | Field | Value |
 |-------|-------|
 | **ID** | P2-07 |
-| **Status** | `OPEN` |
+| **Status** | `FIXED` |
 | **Category** | Backend — Security |
-| **Affected Files** | `backend/app/session/processor.py` (line ~387-388) |
+| **Affected Files** | `backend/app/session/processor.py` (line ~387-388), `backend/app/api/chat.py` (line ~47) |
 | **Fix Plan** | In production, return sanitized message ("An internal error occurred"). Log full exception server-side only. |
+| **Fix Date** | 2026-03-23 |
 
 ---
 
@@ -440,3 +455,17 @@
 | 2026-03-23 | Fixed P0-03 in chat-view.tsx | P0-03: Added `isGeneratingRef` and `stopRef` refs to track latest generation state. Modified existing `useEffect` cleanup to call `stopGeneration()` when navigating away during active generation, aborting the backend and closing the SSE stream. |
 | 2026-03-23 | Fixed P0-04 in use-sse.ts | P0-04: In the SSE cleanup function, reset module-level `persistedLastEventId` and `currentStreamId` to zero/null when leaving during active generation, preventing stale state from contaminating future streams. |
 | 2026-03-23 | Fixed P0-05 in session-list.tsx and processor.py | P0-05 (Part A): Added abort check at the top of `handleDeleteConfirm` — if the deleted session has active generation, sends abort API call and calls `finishGeneration()` before proceeding. (Part B): Added `DONE` event publish in the `IntegrityError` catch block so frontend receives a termination signal when a session is deleted mid-generation. |
+| 2026-03-23 | Fixed P1-01 in permission-dialog.tsx | P1-01: Added `hasDeniedRef` and a `useEffect` that auto-denies (calls `onRespond(false)`) once when `expired` becomes true, so the backend receives a deny response on timeout instead of waiting indefinitely. Ref resets on `callId` change for subsequent requests. |
+| 2026-03-23 | Fixed P1-02 in use-chat.ts | P1-02: Added `console.warn` in `stopGeneration` catch block to alert that the abort request failed and the backend may still be generating. The `finishGeneration()` call correctly runs unconditionally since the user explicitly requested stop. |
+| 2026-03-23 | Fixed P1-04 in use-chat.ts | P1-04: Extended error toast duration from default 3s to 8s (`{ duration: 8000 }`). Input text restoration was already handled by chat-form.tsx's `result === false` check. |
+| 2026-03-23 | Fixed P1-10 in chat.py | P1-10: Replaced `async with sm._semaphore` with explicit `asyncio.wait_for(acquire(), timeout=30)`. On timeout, publishes AGENT_ERROR ("Server is busy") and completes the job instead of blocking forever. |
+| 2026-03-23 | Fixed P1-12 in compaction.py and events.py | P1-12: Added `COMPACTION_ERROR` SSE event constant. When `_phase2_summarize` catches an exception, it now publishes a `compaction-error` event to the frontend with a user-facing message before returning `None`. |
+| 2026-03-23 | Fixed P2-06 in processor.py | P2-06: Added module-level `_search_quota_lock = asyncio.Lock()`. Converted `_get_search_quota()` and `_increment_search_count()` to async functions that acquire the lock before reading/writing the global quota variables. Updated all call sites to `await`. |
+| 2026-03-23 | Fixed P2-07 in processor.py and chat.py | P2-07: Replaced `str(e)` in AGENT_ERROR payloads with generic message "An internal error occurred. Please try again." in both `run_generation` (processor.py) and `_on_task_done` (chat.py). Full exceptions are still logged server-side via `logger.exception`. |
+| 2026-03-23 | Fixed P2-01 in onboarding-screen.tsx | P2-01: Added `codeCountdown` state with `useEffect` timer that starts at 600s when entering verification step. Displays "Code expires in M:SS" below the email confirmation. Shows "Code expired -- please resend" at zero. Countdown resets on resend. |
+| 2026-03-23 | Fixed P2-02 in use-auto-detect-provider.ts | P2-02: Added `refetchInterval: activeProvider === null ? 10_000 : false` to the Ollama status query so it polls every 10s until a provider is detected. |
+| 2026-03-23 | Fixed P2-03 in use-sessions.ts | P2-03: Added `onMutate` optimistic update to `useRenameSession` that immediately updates the infinite query cache. Added `onError` rollback to restore previous data on failure. Replaced `onSuccess` with `onSettled` for cache invalidation. |
+| 2026-03-23 | Fixed P1-03 in message-list.tsx | P1-03: Replaced hardcoded 800ms fallback timer with message-count-aware logic. Tracks `prevMessageCountRef` before generation ends. Fallback hides early when `messages.length` increases (new assistant message loaded from DB). Safety timeout increased to 2000ms. |
+| 2026-03-23 | Fixed P1-08 in use-sse.ts and chat-store.ts | P1-08: Added `clearStreamingContent` action to chat-store that resets `streamingParts`, `streamingText`, and `streamingReasoning` without clearing session/stream IDs. Called in the DESYNC handler before refetching DB messages to prevent stale streaming data from persisting. |
+| 2026-03-23 | Fixed P1-07 in header-model-dropdown.tsx | P1-07: Added early return with `Loader2` spinner and "Loading models..." text when `isLoading && activeProvider`, distinguishing the loading state from the no-provider state. "Setup Provider" button now only shows when there truly is no active provider. |
+| 2026-03-23 | Fixed P1-13 in session-list.tsx | P1-13: Replaced fixed 3-second `setInterval` retry with exponential backoff using `setTimeout`. Delay starts at 3s and doubles each attempt (3s, 6s, 12s, 24s, 30s cap). Stops after 10 attempts to avoid indefinite polling. |

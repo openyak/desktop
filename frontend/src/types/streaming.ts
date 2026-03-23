@@ -20,6 +20,7 @@ export const SSE_EVENTS = {
   DONE: "done",
   AGENT_ERROR: "agent-error",
   ERROR: "error",
+  COMPACTION_ERROR: "compaction-error",
   PLAN_REVIEW: "plan-review",
   MODEL_LOADING: "model-loading",
 } as const;

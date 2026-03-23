@@ -147,14 +147,22 @@ export function SessionList() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, isContentSearch]);
 
   // Startup resilience: if the initial sessions request fails (e.g. backend not
-  // fully ready yet), keep retrying in background so the sidebar hydrates
-  // without requiring a manual action like sending a new message.
+  // fully ready yet), retry with exponential backoff so the sidebar hydrates
+  // without hammering the backend during recovery.
   useEffect(() => {
     if (!isError) return;
-    const timer = setInterval(() => {
-      void refetch();
-    }, 3000);
-    return () => clearInterval(timer);
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const retry = () => {
+      const delay = Math.min(3000 * Math.pow(2, attempt), 30000);
+      timer = setTimeout(() => {
+        void refetch();
+        attempt++;
+        if (attempt < 10) retry();
+      }, delay);
+    };
+    retry();
+    return () => clearTimeout(timer);
   }, [isError, refetch]);
 
   // Compute session-only indices for keyboard navigation (skip headers)

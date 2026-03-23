@@ -82,6 +82,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
   const [submitting, setSubmitting] = useState(false);
   const startTimeRef = useRef(Date.now());
   const expired = remainingMs <= 0;
+  const hasDeniedRef = useRef(false);
   const savePermissionRule = useSettingsStore((s) => s.savePermissionRule);
   const displayTool = permission.tool || permission.permission || "this action";
   const details = getToolExplanation(permission.tool || permission.permission);
@@ -108,6 +109,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
   useEffect(() => {
     setSubmitting(false);
+    hasDeniedRef.current = false;
   }, [permission.callId]);
 
   // Countdown timer
@@ -126,6 +128,13 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
     return () => clearInterval(interval);
   }, [permission.callId]);
+
+  useEffect(() => {
+    if (expired && !hasDeniedRef.current) {
+      hasDeniedRef.current = true;
+      handleRespond(false);
+    }
+  }, [expired, handleRespond]);
 
   const remainingSec = Math.ceil(remainingMs / 1000);
   const remainingMin = Math.floor(remainingSec / 60);

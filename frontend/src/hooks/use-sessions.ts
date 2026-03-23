@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
 import type { SessionResponse, SessionCreate, SessionSearchResult } from "@/types/session";
@@ -60,10 +60,30 @@ export function useDeleteSession() {
 
 export function useRenameSession() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) =>
+  type SessionPages = InfiniteData<SessionResponse[]>;
+  return useMutation<SessionResponse, unknown, { id: string; title: string }, { previous?: SessionPages }>({
+    mutationFn: ({ id, title }) =>
       api.patch<SessionResponse>(API.SESSIONS.DETAIL(id), { title }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.sessions.all }),
+    onMutate: async ({ id, title }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.sessions.all });
+      const previous = qc.getQueryData<SessionPages>(queryKeys.sessions.all);
+      qc.setQueryData<SessionPages>(queryKeys.sessions.all, (old) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) =>
+            page.map((s) => s.id === id ? { ...s, title } : s)
+          ),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData<SessionPages>(queryKeys.sessions.all, context.previous);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.sessions.all }),
   });
 }
 

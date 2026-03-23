@@ -435,13 +435,18 @@ export function useSSE(streamId: string | null) {
     });
 
     // Desync — backend dropped events due to subscriber queue overflow.
-    // Refetch messages from DB to get the ground-truth state.
+    // Clear stale streaming state, then refetch messages from DB.
     client.on(SSE_EVENTS.DESYNC, (_data, id) => {
       persistedLastEventId = id;
+      store.getState().clearStreamingContent();
       const sessionId = store.getState().sessionId;
       if (sessionId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(sessionId) });
       }
+    });
+
+    client.on(SSE_EVENTS.COMPACTION_ERROR, () => {
+      toast.warning("Context compression failed. Consider starting a new chat.");
     });
 
     // Completion
