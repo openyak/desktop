@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useChat } from "@/hooks/use-chat";
 import { useMessages } from "@/hooks/use-messages";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useChatStore } from "@/stores/chat-store";
 import { useArtifactStore } from "@/stores/artifact-store";
 import { useActivityStore } from "@/stores/activity-store";
 import { api } from "@/lib/api";
@@ -43,9 +44,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     pendingPlanReview,
   } = useChat(sessionId);
 
-  // Refs to access latest values in cleanup without re-triggering the effect
-  const isGeneratingRef = useRef(isGenerating);
-  isGeneratingRef.current = isGenerating;
+  // Ref to access latest stopGeneration in cleanup without re-triggering the effect
   const stopRef = useRef(stopGeneration);
   stopRef.current = stopGeneration;
 
@@ -57,14 +56,29 @@ export function ChatView({ sessionId }: ChatViewProps) {
     staleTime: 30_000,
   });
 
-  // Close right-side panels when switching sessions; abort generation if active
+  // Close right-side panels when switching sessions; abort generation if active.
+  // We use a ref to track whether we're truly leaving this session vs. React
+  // Strict Mode's dev-only double-invoke (mount → unmount → remount).
+  const sessionMountedRef = useRef(false);
   useEffect(() => {
     useArtifactStore.getState().clearAll();
     useActivityStore.getState().close();
+    sessionMountedRef.current = true;
     return () => {
-      if (isGeneratingRef.current) {
-        stopRef.current();
-      }
+      // Defer the abort check to the next microtask. If this is a React Strict
+      // Mode double-invoke, the component will remount synchronously and set
+      // sessionMountedRef back to true before the microtask runs. If it's a
+      // real unmount/session change, the ref stays false.
+      sessionMountedRef.current = false;
+      const capturedStopRef = stopRef.current;
+      const capturedSessionId = sessionId;
+      queueMicrotask(() => {
+        if (sessionMountedRef.current) return; // StrictMode remount — skip abort
+        const state = useChatStore.getState();
+        if (state.isGenerating && state.sessionId === capturedSessionId) {
+          capturedStopRef();
+        }
+      });
     };
   }, [sessionId]);
 
