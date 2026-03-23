@@ -148,8 +148,7 @@ export function useChat(currentSessionId?: string) {
     try {
       await api.post(API.CHAT.ABORT, { stream_id: streamId });
     } catch (err) {
-      console.error("Failed to abort:", err);
-      console.warn("Abort request failed — backend may still be generating");
+      console.error("Failed to abort — backend may still be generating:", err);
     }
     // Clean up frontend state immediately — don't wait for backend DONE event
     // (the backend may delay DONE while running post-generation tasks like title generation)

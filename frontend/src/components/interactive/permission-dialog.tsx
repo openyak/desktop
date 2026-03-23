@@ -132,9 +132,9 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
   useEffect(() => {
     if (expired && !hasDeniedRef.current) {
       hasDeniedRef.current = true;
-      onRespond(false);
+      handleRespond(false);
     }
-  }, [expired, onRespond]);
+  }, [expired, handleRespond]);
 
   const remainingSec = Math.ceil(remainingMs / 1000);
   const remainingMin = Math.floor(remainingSec / 60);

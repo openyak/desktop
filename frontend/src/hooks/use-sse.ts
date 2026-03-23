@@ -445,6 +445,10 @@ export function useSSE(streamId: string | null) {
       }
     });
 
+    client.on(SSE_EVENTS.COMPACTION_ERROR, () => {
+      toast.warning("Context compression failed. Consider starting a new chat.");
+    });
+
     // Completion
     client.on(SSE_EVENTS.DONE, async (_data, id) => {
       persistedLastEventId = id;

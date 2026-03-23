@@ -116,14 +116,16 @@ async def _get_search_quota() -> tuple[int, bool]:
         return _search_quota_count, _search_credits_mode
 
 
-async def _increment_search_count() -> None:
-    global _search_quota_date, _search_quota_count
+async def _increment_search_count(*, charged: bool = False) -> None:
+    global _search_quota_date, _search_quota_count, _search_credits_mode
     async with _search_quota_lock:
         today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         if _search_quota_date != today:
             _search_quota_date = today
             _search_quota_count = 0
         _search_quota_count += 1
+        if charged:
+            _search_credits_mode = True
 
 
 def _is_jwt_expired(token: str, margin_seconds: int = 60) -> bool:
@@ -1021,10 +1023,8 @@ class SessionProcessor:
 
                     # Web search quota tracking
                     if tool.id == "web_search" and result.success:
-                        await _increment_search_count()
-                        if result.metadata and result.metadata.get("charged"):
-                            global _search_credits_mode
-                            _search_credits_mode = True
+                        charged = bool(result.metadata and result.metadata.get("charged"))
+                        await _increment_search_count(charged=charged)
 
                     # Track todos from todo tool results
                     if tool.id == "todo" and result.metadata and "todos" in result.metadata:
