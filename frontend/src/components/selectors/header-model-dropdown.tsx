@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Star } from "lucide-react";
+import { Check, ChevronDown, Loader2, Star } from "lucide-react";
 import { useProviderModels } from "@/hooks/use-provider-models";
 import { useModelArenaMap, type ArenaScore } from "@/hooks/use-arena-scores";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -131,6 +131,20 @@ export function HeaderModelDropdown() {
 
   const selectedName = visibleModels.find((m) => m.id === selectedModel)?.name;
   const shortModel = selectedName ?? (selectedModel ? (selectedModel.includes("/") ? selectedModel.split("/").pop() : selectedModel) : t("noModelFound"));
+
+  // Models still loading with an active provider — show loading indicator
+  if (isLoading && activeProvider) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[15px] font-semibold text-[var(--text-tertiary)] rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-default"
+      >
+        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        <span className="truncate">{t("loadingModels", "Loading models...")}</span>
+      </button>
+    );
+  }
 
   // No models available — clicking navigates to provider settings instead of opening dropdown
   if (noModels) {

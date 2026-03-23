@@ -25,6 +25,7 @@ from app.provider.registry import ProviderRegistry
 from app.session.manager import create_message, create_part
 from app.streaming.events import (
     COMPACTED,
+    COMPACTION_ERROR,
     COMPACTION_PHASE,
     COMPACTION_PROGRESS,
     COMPACTION_START,
@@ -248,6 +249,10 @@ async def _phase2_summarize(
 
     except Exception as e:
         logger.warning("Failed to generate compaction summary: %s", e)
+        job.publish(SSEEvent(COMPACTION_ERROR, {
+            "session_id": session_id,
+            "message": "Context compression failed. Consider starting a new chat.",
+        }))
         return None
 
 

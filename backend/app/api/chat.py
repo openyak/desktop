@@ -44,15 +44,23 @@ def _on_task_done(task: asyncio.Task[None], *, job: GenerationJob) -> None:
     if exc is not None:
         logger.error("Unhandled exception in generation task %s: %s", task.get_name(), exc, exc_info=exc)
         try:
-            job.publish(SSEEvent(AGENT_ERROR, {"error_message": f"Internal error: {exc}"}))
+            job.publish(SSEEvent(AGENT_ERROR, {"error_message": "An internal error occurred. Please try again."}))
         except Exception:
             logger.exception("Failed to publish AGENT_ERROR for task %s", task.get_name())
 
 
 async def _run_with_semaphore(sm: StreamManager, job: GenerationJob, coro) -> None:
     """Run generation under the concurrency semaphore."""
-    async with sm._semaphore:
+    try:
+        await asyncio.wait_for(sm._semaphore.acquire(), timeout=30)
+    except asyncio.TimeoutError:
+        job.publish(SSEEvent(AGENT_ERROR, {"error_message": "Server is busy. Please try again shortly."}))
+        job.complete()
+        return
+    try:
         await coro
+    finally:
+        sm._semaphore.release()
 
 
 @router.post("/chat/prompt", response_model=PromptResponse)

@@ -56,6 +56,7 @@ interface ChatStore {
   setPlanReview: (req: PlanReviewRequest) => void;
   clearPlanReview: () => void;
   setModelLoading: (loading: boolean) => void;
+  clearStreamingContent: () => void;
   finishGeneration: () => void;
   reset: () => void;
 }
@@ -339,6 +340,13 @@ export const useChatStore = create<ChatStore>((set) => ({
   clearPlanReview: () => set({ pendingPlanReview: null }),
 
   setModelLoading: (loading) => set({ isModelLoading: loading }),
+
+  clearStreamingContent: () =>
+    set({
+      streamingParts: [],
+      streamingText: "",
+      streamingReasoning: "",
+    }),
 
   finishGeneration: () =>
     set((s) => {

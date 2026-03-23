@@ -135,7 +135,7 @@ export function useChat(currentSessionId?: string) {
           }
         }
 
-        toast.error("Failed to send message");
+        toast.error("Failed to send message", { duration: 8000 });
         return false;
       }
     },
@@ -149,6 +149,7 @@ export function useChat(currentSessionId?: string) {
       await api.post(API.CHAT.ABORT, { stream_id: streamId });
     } catch (err) {
       console.error("Failed to abort:", err);
+      console.warn("Abort request failed — backend may still be generating");
     }
     // Clean up frontend state immediately — don't wait for backend DONE event
     // (the backend may delay DONE while running post-generation tasks like title generation)
