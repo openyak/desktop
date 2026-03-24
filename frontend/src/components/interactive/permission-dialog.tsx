@@ -84,6 +84,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
   const startTimeRef = useRef(Date.now());
   const expired = remainingMs <= 0;
   const hasDeniedRef = useRef(false);
+  const respondRef = useRef<(allow: boolean) => void>(undefined);
   const savePermissionRule = useSettingsStore((s) => s.savePermissionRule);
   const displayTool = permission.tool || permission.permission || "this action";
   const details = getToolExplanation(permission.tool || permission.permission);
@@ -103,6 +104,29 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
       setSubmitting(false);
     }
   };
+
+  // Keep ref in sync for keyboard handler (avoids stale closure)
+  respondRef.current = handleRespond;
+
+  // Keyboard shortcuts: Y/Enter = Allow, N/Escape = Deny
+  useEffect(() => {
+    if (expired || isMobile) return;
+    const handler = (e: KeyboardEvent) => {
+      // Don't capture if user is typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "y" || e.key === "Y" || e.key === "Enter") {
+        e.preventDefault();
+        respondRef.current?.(true);
+      } else if (e.key === "n" || e.key === "N" || e.key === "Escape") {
+        e.preventDefault();
+        respondRef.current?.(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [expired, isMobile, permission.callId]);
 
   // Send browser notification when permission request appears
   useEffect(() => {
@@ -145,6 +169,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
   // Show warning when < 60s remaining
   const isUrgent = remainingSec <= 60 && !expired;
+  const progressPercent = expired ? 0 : (remainingMs / PERMISSION_TIMEOUT) * 100;
 
   // Mobile: bottom-sheet style anchored to bottom
   if (isMobile) {
@@ -199,6 +224,16 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
             {!expired && (
               <>
+                {/* Countdown progress bar */}
+                <div className="h-1.5 rounded-full bg-[var(--surface-tertiary)] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+                      isUrgent ? "bg-[var(--color-destructive)]" : "bg-[var(--color-warning)]"
+                    }`}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
                 <div className="flex items-center gap-2 py-2 border-t border-[var(--border-default)]">
                   <Switch
                     checked={rememberChoice}
@@ -295,6 +330,16 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
               {!expired && (
                 <>
+                  {/* Countdown progress bar */}
+                  <div className="h-1 rounded-full bg-[var(--surface-tertiary)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+                        isUrgent ? "bg-[var(--color-destructive)]" : "bg-[var(--color-warning)]"
+                      }`}
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2 py-2 border-t border-[var(--border-default)]">
                     <Switch
                       checked={rememberChoice}
@@ -319,6 +364,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
                     >
                       <ShieldX className="h-3.5 w-3.5" />
                       Deny
+                      <kbd className="ml-1 text-[10px] opacity-50 font-normal">N</kbd>
                     </Button>
                     <Button
                       type="button"
@@ -330,6 +376,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
                     >
                       <ShieldCheck className="h-3.5 w-3.5" />
                       Allow
+                      <kbd className="ml-1 text-[10px] opacity-50 font-normal">Y</kbd>
                     </Button>
                   </div>
                 </>

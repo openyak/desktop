@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Trash2, Pencil, MoreHorizontal, FileDown, FolderOpen } from "lucide-react";
+import { Trash2, Pencil, MoreHorizontal, FileDown, FileText, FolderOpen, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
@@ -25,6 +25,8 @@ interface SessionItemProps {
   onDelete: (id: string, title: string) => void;
   onRename: (id: string, newTitle: string) => void;
   onExportPdf?: (id: string, title: string) => void;
+  onExportMarkdown?: (id: string, title: string) => void;
+  onTogglePin?: (id: string, pinned: boolean) => void;
   isEditing?: boolean;
   onEditStart?: (id: string) => void;
   onEditEnd?: () => void;
@@ -37,6 +39,8 @@ export function SessionItem({
   onDelete,
   onRename,
   onExportPdf,
+  onExportMarkdown,
+  onTogglePin,
   isEditing = false,
   onEditStart,
   onEditEnd,
@@ -198,6 +202,18 @@ export function SessionItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
+                  onTogglePin?.(session.id, !session.is_pinned);
+                }}
+              >
+                {session.is_pinned ? (
+                  <><PinOff className="h-3.5 w-3.5" />{t('unpin', { defaultValue: 'Unpin' })}</>
+                ) : (
+                  <><Pin className="h-3.5 w-3.5" />{t('pin', { defaultValue: 'Pin' })}</>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
                   onEditStart?.(session.id);
                 }}
               >
@@ -212,6 +228,15 @@ export function SessionItem({
               >
                 <FileDown className="h-3.5 w-3.5" />
                 {t('exportPdf')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onExportMarkdown?.(session.id, title);
+                }}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {t('exportMarkdown', { defaultValue: 'Export Markdown' })}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

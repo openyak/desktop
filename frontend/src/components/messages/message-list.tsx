@@ -94,6 +94,7 @@ export function MessageList({
 }: MessageListProps) {
   const { scrollRef, scrollElementRef, bottomRef, isAtBottom, scrollToBottom } = useScrollAnchor();
   const topSentinelRef = useRef<HTMLDivElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Keep StreamingMessage visible briefly after generation finishes so the
   // DB-fetched AssistantMessageGroup has time to render. Without this,
@@ -173,6 +174,21 @@ export function MessageList({
     }
     return newIds;
   }, [messages]);
+
+  // Reset unread count when user scrolls to bottom
+  useEffect(() => {
+    if (isAtBottom) setUnreadCount(0);
+  }, [isAtBottom]);
+
+  // Increment unread count when new messages arrive while scrolled up
+  const prevMsgLenRef = useRef(messages.length);
+  useEffect(() => {
+    const prevLen = prevMsgLenRef.current;
+    prevMsgLenRef.current = messages.length;
+    if (messages.length > prevLen && !isAtBottom) {
+      setUnreadCount((c) => c + (messages.length - prevLen));
+    }
+  }, [messages.length, isAtBottom]);
 
   // Group consecutive assistant messages so multi-step responses render as one block
   // Regroup whenever message content changes. Parts can be appended to existing
@@ -403,11 +419,16 @@ export function MessageList({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            onClick={scrollToBottom}
+            onClick={() => { scrollToBottom(); setUnreadCount(0); }}
             aria-label="Scroll to bottom"
             className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center h-9 w-9 rounded-full border border-[var(--border-default)] bg-[var(--surface-primary)] shadow-[var(--shadow-lg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors hover:[&_svg]:translate-y-0.5 [&_svg]:transition-transform [&_svg]:duration-150"
           >
             <ArrowDown className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[var(--brand-primary)] text-[var(--brand-primary-text)] text-[10px] font-semibold leading-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </motion.button>
         )}
       </AnimatePresence>

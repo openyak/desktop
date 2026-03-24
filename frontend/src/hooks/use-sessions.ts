@@ -87,6 +87,35 @@ export function useRenameSession() {
   });
 }
 
+export function usePinSession() {
+  const qc = useQueryClient();
+  type SessionPages = InfiniteData<SessionResponse[]>;
+  return useMutation<SessionResponse, unknown, { id: string; is_pinned: boolean }, { previous?: SessionPages }>({
+    mutationFn: ({ id, is_pinned }) =>
+      api.patch<SessionResponse>(API.SESSIONS.DETAIL(id), { is_pinned }),
+    onMutate: async ({ id, is_pinned }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.sessions.all });
+      const previous = qc.getQueryData<SessionPages>(queryKeys.sessions.all);
+      qc.setQueryData<SessionPages>(queryKeys.sessions.all, (old) => {
+        if (!old?.pages) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) =>
+            page.map((s) => s.id === id ? { ...s, is_pinned } : s)
+          ),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData<SessionPages>(queryKeys.sessions.all, context.previous);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.sessions.all }),
+  });
+}
+
 export function useSearchSessions(query: string) {
   const debouncedQuery = useDebouncedValue(query, 300);
   return useQuery({

@@ -22,6 +22,7 @@ class SessionUpdate(BaseModel):
 
     title: str | None = None
     directory: str | None = None
+    is_pinned: bool | None = None
     time_archived: datetime | None = None
     permission: dict[str, Any] | None = None
 
@@ -40,6 +41,7 @@ class SessionResponse(BaseModel):
     summary_deletions: int | None = None
     summary_files: int | None = None
     summary_diffs: list[Any] | None = None
+    is_pinned: bool = False
     permission: dict[str, Any] | list[Any] | None = None
     time_created: datetime
     time_updated: datetime

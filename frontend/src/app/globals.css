@@ -81,10 +81,10 @@
   --border-default: #2b2620;
   --border-heavy: #3d362d;
 
-  /* Code block surfaces (dark theme keeps same dark code blocks) */
-  --code-block-bg: #1a1815;
-  --code-block-header: #23201a;
-  --code-block-border: #3d362d;
+  /* Code block surfaces — slightly lifted from page bg for contrast */
+  --code-block-bg: #1e1b17;
+  --code-block-header: #262219;
+  --code-block-border: #453d32;
   --code-block-text: #D4D4D4;
   --code-block-text-hover: #FFFFFF;
   --code-block-success: #4EC9B0;

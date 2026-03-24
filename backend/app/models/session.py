@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -34,6 +34,9 @@ class Session(Base, TimestampMixin):
     summary_deletions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     summary_files: Mapped[int | None] = mapped_column(Integer, nullable=True)
     summary_diffs: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    # Pin to top of session list
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
 
     # Permission override at session level
     permission: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON, nullable=True)

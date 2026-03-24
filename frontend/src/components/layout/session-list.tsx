@@ -10,7 +10,7 @@ import { API, IS_DESKTOP, queryKeys, resolveApiUrl } from "@/lib/constants";
 import { api } from "@/lib/api";
 import { useChatStore } from "@/stores/chat-store";
 import { useSidebarStore } from "@/stores/sidebar-store";
-import { useSessions, useDeleteSession, useRenameSession, useSearchSessions } from "@/hooks/use-sessions";
+import { useSessions, useDeleteSession, useRenameSession, usePinSession, useSearchSessions } from "@/hooks/use-sessions";
 import { SessionItem } from "./session-item";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +39,7 @@ export function SessionList() {
   } = useSessions();
   const deleteSession = useDeleteSession();
   const renameSession = useRenameSession();
+  const pinSession = usePinSession();
   const queryClient = useQueryClient();
   const searchQuery = useSidebarStore((s) => s.searchQuery);
   const isContentSearch = searchQuery.trim().length >= 2;
@@ -98,11 +99,19 @@ export function SessionList() {
     );
   }, [sessions, searchQuery, isContentSearch, searchResults]);
 
-  const grouped = useMemo(() => groupSessionsByDate(filtered), [filtered]);
+  const pinned = useMemo(() => filtered.filter((s) => s.is_pinned), [filtered]);
+  const unpinned = useMemo(() => filtered.filter((s) => !s.is_pinned), [filtered]);
+  const grouped = useMemo(() => groupSessionsByDate(unpinned), [unpinned]);
 
   // Flatten grouped data into a single list for virtualization
   const flatItems = useMemo(() => {
     const items: FlatItem[] = [];
+    if (pinned.length > 0) {
+      items.push({ type: "header", label: "pinned" });
+      for (const session of pinned) {
+        items.push({ type: "session", session, snippet: snippetMap.get(session.id) });
+      }
+    }
     for (const group of grouped) {
       items.push({ type: "header", label: group.label });
       for (const session of group.sessions) {
@@ -110,7 +119,7 @@ export function SessionList() {
       }
     }
     return items;
-  }, [grouped, snippetMap]);
+  }, [pinned, grouped, snippetMap]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -311,6 +320,10 @@ export function SessionList() {
     renameSession.mutate({ id, title: newTitle });
   }, [renameSession]);
 
+  const handleTogglePin = useCallback((id: string, is_pinned: boolean) => {
+    pinSession.mutate({ id, is_pinned });
+  }, [pinSession]);
+
   const handleEditStart = useCallback((id: string) => {
     setEditingId(id);
   }, []);
@@ -354,6 +367,32 @@ export function SessionList() {
     } catch (err) {
       console.error("PDF export failed:", err);
       toast.error(t('failedExportPdf'));
+    }
+  }, []);
+
+  const handleExportMarkdown = useCallback(async (id: string, title: string) => {
+    try {
+      const exportUrl = resolveApiUrl(API.SESSIONS.EXPORT_MD(id));
+
+      if (IS_DESKTOP) {
+        const { desktopAPI } = await import("@/lib/tauri-api");
+        await desktopAPI.downloadAndSave({ url: exportUrl, defaultName: `${title}.md` });
+      } else {
+        const res = await fetch(exportUrl);
+        if (!res.ok) throw new Error("Markdown export failed");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${title}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error("Markdown export failed:", err);
+      toast.error(t('failedExportMarkdown', { defaultValue: 'Failed to export Markdown' }));
     }
   }, []);
 
@@ -435,6 +474,8 @@ export function SessionList() {
                     onDelete={handleDeleteRequest}
                     onRename={handleRename}
                     onExportPdf={handleExportPdf}
+                    onExportMarkdown={handleExportMarkdown}
+                    onTogglePin={handleTogglePin}
                     isEditing={editingId === item.session.id}
                     onEditStart={handleEditStart}
                     onEditEnd={handleEditEnd}

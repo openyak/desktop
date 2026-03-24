@@ -123,6 +123,7 @@ export const API = {
       `/api/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`,
     DETAIL: (id: string) => `/api/sessions/${id}`,
     EXPORT_PDF: (id: string) => `/api/sessions/${id}/export-pdf`,
+    EXPORT_MD: (id: string) => `/api/sessions/${id}/export-md`,
     TODOS: (id: string) => `/api/sessions/${id}/todos`,
     FILES: (id: string) => `/api/sessions/${id}/files`,
   },

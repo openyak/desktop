@@ -10,6 +10,7 @@ export interface SessionCreate {
 export interface SessionUpdate {
   title?: string | null;
   directory?: string | null;
+  is_pinned?: boolean | null;
   time_archived?: string | null;
   permission?: Record<string, unknown> | null;
 }
@@ -31,6 +32,7 @@ export interface SessionResponse {
   summary_deletions: number;
   summary_files: number;
   summary_diffs: unknown[];
+  is_pinned: boolean;
   permission: Record<string, unknown>;
   time_created: string;
   time_updated: string;

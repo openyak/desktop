@@ -123,6 +123,8 @@ async def update_session_endpoint(
         _trigger_index(request, body.directory, session_id)
     if body.time_archived is not None:
         session.time_archived = body.time_archived
+    if body.is_pinned is not None:
+        session.is_pinned = body.is_pinned
     if body.permission is not None:
         session.permission = body.permission
 
@@ -281,3 +283,35 @@ async def export_session_pdf(
     except Exception as exc:
         log.exception("Session PDF export failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/sessions/{session_id}/export-md")
+async def export_session_markdown(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Export an entire conversation as a Markdown file."""
+    session = await get_session(db, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = await get_messages(db, session_id)
+    title = session.title or "Conversation"
+    md_content = _messages_to_markdown(title, messages)
+
+    from urllib.parse import quote
+    safe_title = "".join(
+        c if c.isascii() and (c.isalnum() or c in " _-") else "_" for c in title
+    )
+    utf8_title = quote(title, safe="")
+
+    return Response(
+        content=md_content.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{safe_title}.md"; '
+                f"filename*=UTF-8''{utf8_title}.md"
+            ),
+        },
+    )

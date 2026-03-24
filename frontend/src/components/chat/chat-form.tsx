@@ -30,12 +30,58 @@ interface ChatFormProps {
   directory?: string | null;
 }
 
-/** Ephemeral per-session draft cache (module-level, not persisted to storage). */
+/** Persistent per-session draft cache backed by localStorage. */
 interface Draft {
   input: string;
   attachments: FileAttachment[];
+  savedAt: number;
 }
-const draftCache = new Map<string, Draft>();
+
+const DRAFT_STORAGE_KEY = "openyak-drafts";
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** In-memory mirror of localStorage drafts — avoids repeated JSON parsing. */
+let draftMirror: Map<string, Draft> | null = null;
+
+function loadDrafts(): Map<string, Draft> {
+  if (draftMirror) return draftMirror;
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) { draftMirror = new Map(); return draftMirror; }
+    const parsed: Record<string, Draft> = JSON.parse(raw);
+    const now = Date.now();
+    // Evict expired drafts on load
+    const entries = Object.entries(parsed).filter(
+      ([, d]) => now - d.savedAt < DRAFT_MAX_AGE_MS,
+    );
+    draftMirror = new Map(entries);
+  } catch {
+    draftMirror = new Map();
+  }
+  return draftMirror;
+}
+
+function saveDraft(key: string, draft: Draft) {
+  const map = loadDrafts();
+  map.set(key, draft);
+  flushDrafts(map);
+}
+
+function deleteDraft(key: string) {
+  const map = loadDrafts();
+  if (map.delete(key)) flushDrafts(map);
+}
+
+function flushDrafts(map: Map<string, Draft>) {
+  try {
+    localStorage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify(Object.fromEntries(map)),
+    );
+  } catch {
+    // localStorage quota exceeded — silently skip
+  }
+}
 
 function mergeAttachments(
   existing: FileAttachment[],
@@ -126,18 +172,23 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
 
   // Restore draft on mount (keyed by draftKey)
   useEffect(() => {
-    const saved = draftCache.get(draftKey);
+    const drafts = loadDrafts();
+    const saved = drafts.get(draftKey);
     if (saved) {
       setInput(saved.input);
       setAttachments(saved.attachments);
-      draftCache.delete(draftKey);
+      deleteDraft(draftKey);
     }
     // Save draft on unmount
     return () => {
       const currentInput = inputRef.current;
       const currentAttachments = attachmentsRef.current;
       if (currentInput.trim() || currentAttachments.length > 0) {
-        draftCache.set(draftKey, { input: currentInput, attachments: currentAttachments });
+        saveDraft(draftKey, {
+          input: currentInput,
+          attachments: currentAttachments,
+          savedAt: Date.now(),
+        });
       }
     };
   }, [draftKey]);
@@ -196,7 +247,7 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
         setInput(text);
         setAttachments(files);
       } else {
-        draftCache.delete(draftKey);
+        deleteDraft(draftKey);
       }
     } finally {
       sendingRef.current = false;

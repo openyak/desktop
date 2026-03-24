@@ -105,6 +105,7 @@ export function useChat(currentSessionId?: string) {
             summary_deletions: 0,
             summary_files: 0,
             summary_diffs: [],
+            is_pinned: false,
             permission: {},
             time_created: new Date().toISOString(),
             time_updated: new Date().toISOString(),

@@ -51,16 +51,16 @@ async def list_sessions(
     offset: int = 0,
     project_id: str | None = None,
 ) -> list[Session]:
-    """List sessions with optional project filter."""
-    filters = []
+    """List sessions with optional project filter. Pinned sessions first."""
+    stmt = select(Session).where(Session.parent_id.is_(None))
     if project_id:
-        filters.append(Session.project_id == project_id)
-    filters.append(Session.parent_id.is_(None))  # Exclude subtask sessions
-    return await get_all(
-        db, Session, limit=limit, offset=offset,
-        order_by=Session.time_created.desc(),
-        filters=filters,
-    )
+        stmt = stmt.where(Session.project_id == project_id)
+    stmt = stmt.order_by(
+        Session.is_pinned.desc(),
+        Session.time_created.desc(),
+    ).offset(offset).limit(limit)
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
 
 
 async def search_sessions(
