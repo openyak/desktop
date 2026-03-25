@@ -12,7 +12,8 @@ class PromptRequest(BaseModel):
 
     session_id: str | None = None
     text: str
-    model: str | None = None  # e.g. "z-ai/glm-4.7-flash"
+    model: str | None = None  # e.g. "claude-sonnet-4-20250514"
+    provider_id: str | None = None  # e.g. "anthropic" — which provider to use for the model
     agent: str = "build"
     attachments: list[dict[str, Any]] = []
     permission_presets: dict[str, bool] | None = None

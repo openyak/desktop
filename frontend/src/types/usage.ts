@@ -58,3 +58,13 @@ export interface ApiKeyStatus {
   masked_key: string | null;
   is_valid: boolean | null;
 }
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  is_configured: boolean;
+  enabled: boolean;
+  masked_key: string | null;
+  model_count: number;
+  status: "connected" | "error" | "unconfigured" | "disabled";
+}

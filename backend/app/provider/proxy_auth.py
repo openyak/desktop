@@ -70,7 +70,7 @@ async def refresh_proxy_token(
                 _update_env_file("OPENYAK_PROXY_REFRESH_TOKEN", new_refresh)
 
             # Update the live provider's API key
-            provider = getattr(provider_registry, "get_provider", lambda _: None)("openrouter")
+            provider = getattr(provider_registry, "get_provider", lambda _: None)("openyak-proxy")
             if provider and hasattr(provider, "update_api_key"):
                 provider.update_api_key(new_access)
 

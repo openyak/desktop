@@ -26,6 +26,20 @@ import { cn } from "@/lib/utils";
 import { usdToCreditsPerM, formatCreditsPerM } from "@/lib/pricing";
 import type { ModelInfo } from "@/types/model";
 
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI", anthropic: "Anthropic", google: "Gemini", groq: "Groq",
+  deepseek: "DeepSeek", mistral: "Mistral", xai: "xAI", together: "Together",
+  deepinfra: "DeepInfra", cerebras: "Cerebras", cohere: "Cohere",
+  perplexity: "Perplexity", fireworks: "Fireworks", azure: "Azure",
+  openrouter: "OpenRouter",
+  qwen: "Qwen",
+  kimi: "Kimi",
+  minimax: "MiniMax",
+  zhipu: "ZhipuAI",
+  siliconflow: "SiliconFlow",
+  xiaomi: "MiMo",
+};
+
 type SortMode = "name" | "price" | "quality" | "popular" | "free";
 
 function isFreeModel(m: ModelInfo): boolean {
@@ -37,7 +51,7 @@ function isLegacyFreeRouterModel(m: ModelInfo): boolean {
   return m.id === "openrouter/auto" || normalizedName === "free models router";
 }
 
-const SORT_BUTTONS: { key: SortMode; i18n: string }[] = [
+const SORT_BUTTONS_FULL: { key: SortMode; i18n: string }[] = [
   { key: "popular", i18n: "popular" },
   { key: "quality", i18n: "quality" },
   { key: "price", i18n: "price" },
@@ -45,13 +59,27 @@ const SORT_BUTTONS: { key: SortMode; i18n: string }[] = [
   { key: "name", i18n: "name" },
 ];
 
+const SORT_BUTTONS_SIMPLE: { key: SortMode; i18n: string }[] = [
+  { key: "name", i18n: "name" },
+  { key: "price", i18n: "price" },
+];
+
+/** Providers that have arena ranking data */
+const ARENA_PROVIDERS = new Set<string | null>(["openyak"]);
+
 export function HeaderModelDropdown() {
   const { t } = useTranslation("common");
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<SortMode>("popular");
   const { data: models, isLoading, activeProvider } = useProviderModels();
-  const { selectedModel, setSelectedModel } = useSettingsStore();
+  const hasArena = ARENA_PROVIDERS.has(activeProvider);
+  const [sortBy, setSortBy] = useState<SortMode>(hasArena ? "popular" : "name");
+  const { selectedModel, selectedProviderId, setSelectedModel } = useSettingsStore();
+  const sortButtons = hasArena ? SORT_BUTTONS_FULL : SORT_BUTTONS_SIMPLE;
+  // Reset sort mode when switching between providers with/without arena data
+  useEffect(() => {
+    setSortBy(hasArena ? "popular" : "name");
+  }, [hasArena]);
   const noModels = !activeProvider || (models ?? []).length === 0;
   const arenaMap = useModelArenaMap(models);
   const visibleModels = useMemo(
@@ -65,23 +93,22 @@ export function HeaderModelDropdown() {
       if (selectedModel) setSelectedModel(null);
       return;
     }
-    const modelExists = selectedModel && visibleModels.some((m) => m.id === selectedModel);
+    const modelExists = selectedModel && visibleModels.some((m) => m.id === selectedModel && m.provider_id === selectedProviderId);
     if (!modelExists) {
+      let chosen: ModelInfo;
       if (activeProvider === "openyak" || activeProvider === "byok") {
-        // OpenYak/BYOK: prefer openyak/best-free, then first free model, then first visible
         const preferred = visibleModels.find((m) => m.id === "openyak/best-free");
         const fallback = visibleModels.find((m) => isFreeModel(m));
-        setSelectedModel((preferred ?? fallback ?? visibleModels[0]).id);
+        chosen = preferred ?? fallback ?? visibleModels[0];
       } else if (activeProvider === "chatgpt") {
-        // ChatGPT subscription: prefer gpt-5.4, then first visible
         const preferred = visibleModels.find((m) => m.id === "openai-subscription/gpt-5.4");
-        setSelectedModel((preferred ?? visibleModels[0]).id);
+        chosen = preferred ?? visibleModels[0];
       } else {
-        // Other providers: pick first visible model
-        setSelectedModel(visibleModels[0].id);
+        chosen = visibleModels[0];
       }
+      setSelectedModel(chosen.id, chosen.provider_id);
     }
-  }, [visibleModels, selectedModel, setSelectedModel, activeProvider]);
+  }, [visibleModels, selectedModel, selectedProviderId, setSelectedModel, activeProvider]);
 
   const { pinnedModel, freeModels, paidModels } = useMemo(() => {
     if (visibleModels.length === 0) return { pinnedModel: null, freeModels: [], paidModels: [] };
@@ -119,7 +146,8 @@ export function HeaderModelDropdown() {
           if (va !== vb) return va - vb; // ascending: rank 1 first
           return a.name.localeCompare(b.name);
         }
-        return a.name.localeCompare(b.name);
+        // Name sort: reverse natural order — higher version numbers first (newer)
+        return b.name.localeCompare(a.name, undefined, { numeric: true });
       };
 
       free.sort(makeSortFn());
@@ -129,8 +157,9 @@ export function HeaderModelDropdown() {
     return { pinnedModel: pinned, freeModels: free, paidModels: paid };
   }, [visibleModels, sortBy, arenaMap, activeProvider]);
 
-  const selectedName = visibleModels.find((m) => m.id === selectedModel)?.name;
-  const shortModel = selectedName ?? (selectedModel ? (selectedModel.includes("/") ? selectedModel.split("/").pop() : selectedModel) : t("noModelFound"));
+  const selectedInfo = visibleModels.find((m) => m.id === selectedModel && m.provider_id === selectedProviderId)
+    ?? visibleModels.find((m) => m.id === selectedModel);
+  const shortModel = selectedInfo?.name ?? (selectedModel ? (selectedModel.includes("/") ? selectedModel.split("/").pop() : selectedModel) : t("noModelFound"));
 
   // Models still loading with an active provider — show loading indicator
   if (isLoading && activeProvider) {
@@ -180,7 +209,7 @@ export function HeaderModelDropdown() {
               <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider mr-auto">
                 {t("sortBy")}
               </span>
-              {SORT_BUTTONS.map(({ key, i18n }) => (
+              {sortButtons.map(({ key, i18n }) => (
                 <button
                   key={key}
                   type="button"
@@ -212,7 +241,7 @@ export function HeaderModelDropdown() {
                       <CommandItem
                         value={pinnedModel.name}
                         onSelect={() => {
-                          setSelectedModel(pinnedModel.id);
+                          setSelectedModel(pinnedModel.id, pinnedModel.provider_id);
                           setOpen(false);
                         }}
                         className="text-sm"
@@ -220,7 +249,7 @@ export function HeaderModelDropdown() {
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4 shrink-0",
-                            selectedModel === pinnedModel.id ? "opacity-100" : "opacity-0",
+                            selectedModel === pinnedModel.id && selectedProviderId === pinnedModel.provider_id ? "opacity-100" : "opacity-0",
                           )}
                         />
                         <Star className="mr-1.5 h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)] fill-[var(--text-tertiary)]" />
@@ -237,13 +266,13 @@ export function HeaderModelDropdown() {
                     <CommandGroup heading={freeModels.length > 0 ? t("premium") : undefined}>
                       {paidModels.map((model) => (
                         <ModelRow
-                          key={model.id}
+                          key={`${model.provider_id}/${model.id}`}
                           model={model}
-                          isSelected={selectedModel === model.id}
+                          isSelected={selectedModel === model.id && selectedProviderId === model.provider_id}
                           arena={arenaMap.get(model.id)}
                           sortBy={sortBy}
                           onSelect={() => {
-                            setSelectedModel(model.id);
+                            setSelectedModel(model.id, model.provider_id);
                             setOpen(false);
                           }}
                           t={t}
@@ -257,13 +286,13 @@ export function HeaderModelDropdown() {
                     <CommandGroup heading={t("free")}>
                       {freeModels.map((model) => (
                         <ModelRow
-                          key={model.id}
+                          key={`${model.provider_id}/${model.id}`}
                           model={model}
-                          isSelected={selectedModel === model.id}
+                          isSelected={selectedModel === model.id && selectedProviderId === model.provider_id}
                           arena={arenaMap.get(model.id)}
                           sortBy={sortBy}
                           onSelect={() => {
-                            setSelectedModel(model.id);
+                            setSelectedModel(model.id, model.provider_id);
                             setOpen(false);
                           }}
                           t={t}
@@ -305,9 +334,12 @@ function ModelRow({
     (sortBy === "quality" && arena && arena.arenaScore > 0) ||
     (sortBy === "popular" && arena && arena.popularityRank > 0);
 
+  const providerLabel = PROVIDER_LABELS[model.provider_id] ?? model.provider_id;
+  const showProviderBadge = model.provider_id !== "openrouter" && model.provider_id !== "openai-subscription" && model.provider_id !== "ollama";
+
   return (
     <CommandItem
-      value={model.name}
+      value={`${model.name} ${providerLabel}`}
       onSelect={onSelect}
       className="text-sm"
     >
@@ -318,6 +350,11 @@ function ModelRow({
         )}
       />
       <span className="truncate flex-1">{model.name}</span>
+      {showProviderBadge && (
+        <span className="ml-1.5 shrink-0 text-[9px] font-medium text-[var(--text-tertiary)] bg-[var(--surface-tertiary)] px-1 py-0.5 rounded">
+          {providerLabel}
+        </span>
+      )}
       {/* Right-side badge: contextual based on sort mode */}
       {isSubscription ? (
         <span className="ml-2 shrink-0 text-[10px] font-medium text-[var(--brand-primary)] bg-[var(--brand-primary)]/10 px-1.5 py-0.5 rounded">

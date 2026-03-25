@@ -29,8 +29,10 @@ export type WorkMode = "plan" | "ask" | "auto";
 interface SettingsStore {
   /** Whether the user has completed the first-run onboarding flow */
   hasCompletedOnboarding: boolean;
-  /** Selected model ID (e.g. "openrouter/auto") */
+  /** Selected model ID (e.g. "claude-sonnet-4-20250514") */
   selectedModel: string | null;
+  /** Selected provider ID for the model (e.g. "anthropic") — determines which API key is used */
+  selectedProviderId: string | null;
   /** Selected agent name — derived from workMode */
   selectedAgent: string;
   /** Safe mode: read-only analysis, no file changes or commands */
@@ -51,8 +53,8 @@ interface SettingsStore {
   language: string;
   /** Active provider whose models are shown in selectors */
   activeProvider: ActiveProvider;
-  /** Set model */
-  setSelectedModel: (model: string | null) => void;
+  /** Set model and its provider */
+  setSelectedModel: (model: string | null, providerId?: string | null) => void;
   /** Set agent (for backward compatibility) */
   setSelectedAgent: (agent: string) => void;
   /** Toggle safe mode on/off */
@@ -88,6 +90,7 @@ export const useSettingsStore = create<SettingsStore>()(
     (set, get) => ({
       hasCompletedOnboarding: false,
       selectedModel: null,
+      selectedProviderId: null,
       selectedAgent: "build",
       safeMode: false,
       workMode: "auto" as WorkMode,
@@ -98,7 +101,7 @@ export const useSettingsStore = create<SettingsStore>()(
       hasSeenHints: false,
       language: "auto",
       activeProvider: null,
-      setSelectedModel: (model) => set({ selectedModel: model }),
+      setSelectedModel: (model, providerId) => set({ selectedModel: model, selectedProviderId: providerId ?? null }),
       setSelectedAgent: (agent) => {
         const isPlan = agent === "plan";
         const currentPresets = get().permissionPresets;

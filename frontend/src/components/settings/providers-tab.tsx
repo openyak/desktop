@@ -13,7 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import { proxyApi, ProxyApiError } from "@/lib/proxy-api";
 import { API, IS_DESKTOP, queryKeys } from "@/lib/constants";
 import { desktopAPI } from "@/lib/tauri-api";
-import type { ApiKeyStatus } from "@/types/usage";
+import type { ApiKeyStatus, ProviderInfo } from "@/types/usage";
 import { OllamaPanel } from "@/components/settings/ollama-panel";
 
 interface OpenAISubscriptionStatus {
@@ -114,6 +114,12 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
 
   const { data: keyStatus } = useQuery({ queryKey: queryKeys.apiKeyStatus, queryFn: () => api.get<ApiKeyStatus>(API.CONFIG.API_KEY) });
 
+  // Multi-provider BYOK status
+  const { data: providers } = useQuery({
+    queryKey: queryKeys.providers,
+    queryFn: () => api.get<ProviderInfo[]>(API.CONFIG.PROVIDERS),
+  });
+
   const { data: openaiSubStatus, refetch: refetchOpenaiSub } = useQuery({
     queryKey: queryKeys.openaiSubscription,
     queryFn: () => api.get<OpenAISubscriptionStatus>(API.CONFIG.OPENAI_SUBSCRIPTION),
@@ -148,6 +154,53 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
         else if (openaiSubStatus?.is_connected) setActiveProvider("chatgpt");
         else setActiveProvider(null);
       }
+    },
+  });
+
+  // Per-provider key input state and mutations
+  const [providerKeyInputs, setProviderKeyInputs] = useState<Record<string, string>>({});
+  const [showProviderKey, setShowProviderKey] = useState<Record<string, boolean>>({});
+  const [providerMutatingId, setProviderMutatingId] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<Record<string, string>>({});
+
+  const updateProviderKey = useMutation({
+    mutationFn: async ({ id, apiKey }: { id: string; apiKey: string }) => {
+      setProviderMutatingId(id);
+      return api.post<ProviderInfo>(API.CONFIG.PROVIDER_KEY(id), { api_key: apiKey });
+    },
+    onSuccess: (_data, { id }) => {
+      setProviderKeyInputs((prev) => ({ ...prev, [id]: "" }));
+      setProviderError((prev) => { const next = { ...prev }; delete next[id]; return next; });
+      setProviderMutatingId(null);
+      setActiveProvider("byok");
+      qc.invalidateQueries({ queryKey: queryKeys.providers });
+      qc.invalidateQueries({ queryKey: queryKeys.models });
+    },
+    onError: (err, { id }) => {
+      setProviderMutatingId(null);
+      const detail = err instanceof ApiError ? ((err.body as any)?.detail ?? t('failedSaveKey')) : t('failedSaveKey');
+      setProviderError((prev) => ({ ...prev, [id]: detail }));
+    },
+  });
+
+  const deleteProviderKey = useMutation({
+    mutationFn: async (id: string) => {
+      setProviderMutatingId(id);
+      return api.delete<ProviderInfo>(API.CONFIG.PROVIDER_KEY(id));
+    },
+    onSuccess: () => {
+      setProviderMutatingId(null);
+      qc.invalidateQueries({ queryKey: queryKeys.providers });
+      qc.invalidateQueries({ queryKey: queryKeys.models });
+    },
+    onError: () => { setProviderMutatingId(null); },
+  });
+
+  const toggleProvider = useMutation({
+    mutationFn: (id: string) => api.post<ProviderInfo>(API.CONFIG.PROVIDER_TOGGLE(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.providers });
+      qc.invalidateQueries({ queryKey: queryKeys.models });
     },
   });
 
@@ -210,7 +263,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       <div className="grid grid-cols-4 gap-2">
         {([
           { mode: "openyak" as ProviderMode, label: t('openyakAccount'), icon: Eye, connected: authStore.isConnected },
-          { mode: "byok" as ProviderMode, label: t('ownApiKey'), icon: Eye, connected: !!keyStatus?.is_configured },
+          { mode: "byok" as ProviderMode, label: t('ownApiKey'), icon: Eye, connected: !!keyStatus?.is_configured || (providers ?? []).some((p) => p.is_configured) },
           { mode: "chatgpt" as ProviderMode, label: t('chatgptSubscription'), icon: CreditCard, connected: !!openaiSubStatus?.is_connected },
           { mode: "ollama" as ProviderMode, label: "Ollama", icon: Cpu, connected: ollamaConnected },
         ]).map(({ mode, label, icon: Icon, connected }) => (
@@ -290,23 +343,87 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
 
       {/* Own API Key config */}
       {viewingProvider === "byok" && (
-        <div>
-          <p className="text-xs text-[var(--text-secondary)] mb-3">{t('apiKeyDesc')}{" "}<a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-primary)] underline">openrouter.ai/keys</a>.</p>
-          {keyStatus?.is_configured && (
-            <div className="flex items-center gap-2 mb-3 text-xs">
-              <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
-              <span className="text-[var(--text-secondary)] font-mono">{keyStatus.masked_key}</span>
-              <button onClick={() => deleteKey.mutate()} disabled={deleteKey.isPending} className="ml-1 text-[var(--text-tertiary)] hover:text-[var(--color-destructive)] transition-colors" title={t('removeApiKey')}>{deleteKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}</button>
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)]">{t('byokDesc')}</p>
+
+          {/* All BYOK providers (OpenRouter, OpenAI, Anthropic, Gemini, etc.) */}
+          {(providers ?? []).map((p) => (
+            <div key={p.id} className={`rounded-lg border p-3 space-y-2 transition-opacity ${
+              p.is_configured && !p.enabled ? "border-[var(--border-default)] opacity-50" : "border-[var(--border-default)]"
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[var(--text-primary)]">{p.name}</span>
+                <div className="flex items-center gap-2">
+                  {p.is_configured && p.enabled && (
+                    <span className="text-[10px] text-[var(--text-tertiary)]">{p.model_count} {t('providerModels')}</span>
+                  )}
+                  {p.is_configured && (
+                    <button
+                      type="button"
+                      onClick={() => toggleProvider.mutate(p.id)}
+                      disabled={toggleProvider.isPending}
+                      className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                        p.enabled ? "bg-[var(--color-success)]" : "bg-[var(--surface-tertiary)]"
+                      }`}
+                      title={p.enabled ? t('disableProvider') : t('enableProvider')}
+                    >
+                      <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform ${
+                        p.enabled ? "translate-x-3" : "translate-x-0"
+                      }`} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {p.is_configured && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
+                  <span className="text-[var(--text-secondary)] font-mono">{p.masked_key}</span>
+                  <button
+                    onClick={() => deleteProviderKey.mutate(p.id)}
+                    disabled={providerMutatingId === p.id}
+                    className="ml-1 text-[var(--text-tertiary)] hover:text-[var(--color-destructive)] transition-colors"
+                    title={t('removeApiKey')}
+                  >
+                    {providerMutatingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showProviderKey[p.id] ? "text" : "password"}
+                    value={providerKeyInputs[p.id] ?? ""}
+                    onChange={(e) => setProviderKeyInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                    placeholder={t(`providerKeyPlaceholder_${p.id}`, { defaultValue: `${p.name} API key` })}
+                    className="pr-8 font-mono text-xs"
+                    autoComplete="one-time-code"
+                    data-form-type="other"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowProviderKey((prev) => ({ ...prev, [p.id]: !prev[p.id] }))}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                  >
+                    {showProviderKey[p.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateProviderKey.mutate({ id: p.id, apiKey: providerKeyInputs[p.id] ?? "" })}
+                  disabled={!(providerKeyInputs[p.id] ?? "").trim() || providerMutatingId === p.id}
+                >
+                  {providerMutatingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('save')}
+                </Button>
+              </div>
+              {providerError[p.id] && (
+                <div className="flex items-center gap-1.5 text-xs text-[var(--color-destructive)]">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{providerError[p.id]}</span>
+                </div>
+              )}
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Input type={showKey ? "text" : "password"} value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="sk-or-..." className="pr-8 font-mono text-xs" autoComplete="one-time-code" data-form-type="other" />
-              <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">{showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</button>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => updateKey.mutate(apiKeyInput)} disabled={!apiKeyInput.trim() || updateKey.isPending}>{updateKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('save')}</Button>
-          </div>
-          {updateKey.isError && <div className="flex items-center gap-1.5 mt-2 text-xs text-[var(--color-destructive)]"><AlertCircle className="h-3.5 w-3.5 shrink-0" /><span>{updateKey.error instanceof ApiError ? ((updateKey.error.body as any)?.detail ?? t('failedSaveKey')) : t('failedSaveKey')}</span></div>}
+          ))}
         </div>
       )}
 

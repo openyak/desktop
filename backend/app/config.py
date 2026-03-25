@@ -20,6 +20,33 @@ class Settings(BaseSettings):
     # --- Provider ---
     openrouter_api_key: str = ""
 
+    # --- Direct Provider API Keys (BYOK) ---
+    openai_api_key: str = ""        # OPENYAK_OPENAI_API_KEY
+    anthropic_api_key: str = ""     # OPENYAK_ANTHROPIC_API_KEY
+    google_api_key: str = ""        # OPENYAK_GOOGLE_API_KEY
+    groq_api_key: str = ""          # OPENYAK_GROQ_API_KEY
+    deepseek_api_key: str = ""      # OPENYAK_DEEPSEEK_API_KEY
+    mistral_api_key: str = ""       # OPENYAK_MISTRAL_API_KEY
+    xai_api_key: str = ""           # OPENYAK_XAI_API_KEY
+    together_api_key: str = ""      # OPENYAK_TOGETHER_API_KEY
+    deepinfra_api_key: str = ""     # OPENYAK_DEEPINFRA_API_KEY
+    cerebras_api_key: str = ""      # OPENYAK_CEREBRAS_API_KEY
+    cohere_api_key: str = ""        # OPENYAK_COHERE_API_KEY
+    perplexity_api_key: str = ""    # OPENYAK_PERPLEXITY_API_KEY
+    fireworks_api_key: str = ""     # OPENYAK_FIREWORKS_API_KEY
+    azure_openai_api_key: str = ""  # OPENYAK_AZURE_OPENAI_API_KEY
+    azure_openai_base_url: str = "" # OPENYAK_AZURE_OPENAI_BASE_URL
+    qwen_api_key: str = ""          # OPENYAK_QWEN_API_KEY (Alibaba DashScope)
+    kimi_api_key: str = ""          # OPENYAK_KIMI_API_KEY (Moonshot)
+    minimax_api_key: str = ""       # OPENYAK_MINIMAX_API_KEY
+    zhipu_api_key: str = ""         # OPENYAK_ZHIPU_API_KEY (智谱 GLM)
+    siliconflow_api_key: str = ""   # OPENYAK_SILICONFLOW_API_KEY (硅基流动)
+    xiaomi_api_key: str = ""        # OPENYAK_XIAOMI_API_KEY (MiMo)
+
+    # Comma-separated list of provider IDs to disable (e.g. "groq,deepseek")
+    # Disabled providers are not registered even if their API key is set.
+    disabled_providers: str = ""  # OPENYAK_DISABLED_PROVIDERS
+
     # --- OpenYak Cloud Proxy (billing mode) ---
     proxy_url: str = ""  # e.g. "https://api.openyak.app" — when set, LLM calls go through proxy
     proxy_token: str = ""  # JWT from OpenYak account login

@@ -166,11 +166,12 @@ class SessionPrompt:
                 if all_models:
                     model_id = all_models[0].id
 
-        resolved = self.provider_registry.resolve_model(model_id)
+        provider_id = self.request.provider_id
+        resolved = self.provider_registry.resolve_model(model_id, provider_id)
         if not resolved:
             try:
                 await self.provider_registry.refresh_models()
-                resolved = self.provider_registry.resolve_model(model_id)
+                resolved = self.provider_registry.resolve_model(model_id, provider_id)
             except Exception:
                 pass
         if not resolved:

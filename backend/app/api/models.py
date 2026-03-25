@@ -69,7 +69,11 @@ async def list_models(request: Request) -> list[ModelInfo]:
 
 @router.post("/models/refresh")
 async def refresh_models(request: Request) -> dict:
-    """Force re-fetch model lists from all providers."""
+    """Force re-fetch model lists from all providers (also refreshes models.dev)."""
+    # Refresh models.dev catalog first so providers pick up latest data
+    from app.provider.models_dev import models_dev
+    await models_dev.refresh()
+
     result = await _refresh_with_token_retry(request)
     counts = {pid: len(models) for pid, models in result.items()}
     return {"refreshed": counts}

@@ -94,6 +94,7 @@ export default function MobileNewTaskPage() {
         {
           text: text.trim(),
           model: selectedModel || null,
+          provider_id: useSettingsStore.getState().selectedProviderId || null,
           attachments,
         },
       );

@@ -9,13 +9,20 @@ from app.schemas.provider import ModelInfo, ProviderStatus
 
 logger = logging.getLogger(__name__)
 
+# Aggregator providers — their models should yield to direct providers
+# when no explicit provider_id is given.
+_AGGREGATOR_PROVIDERS = {"openrouter"}
+
 
 class ProviderRegistry:
     """Registry of LLM providers."""
 
     def __init__(self) -> None:
         self._providers: dict[str, BaseProvider] = {}
+        # Quick lookup: model_id → best (provider, model) — used when no provider_id given
         self._model_index: dict[str, tuple[BaseProvider, ModelInfo]] = {}
+        # Full list: ALL (provider, model) pairs — used for all_models() and provider-aware resolve
+        self._full_models: list[tuple[BaseProvider, ModelInfo]] = []
 
     def register(self, provider: BaseProvider) -> None:
         """Register a provider."""
@@ -30,6 +37,9 @@ class ProviderRegistry:
             for mid, (p, m) in self._model_index.items()
             if p.id != provider_id
         }
+        self._full_models = [
+            (p, m) for p, m in self._full_models if p.id != provider_id
+        ]
         logger.info("Unregistered provider: %s", provider_id)
 
     def get_provider(self, provider_id: str) -> BaseProvider | None:
@@ -40,45 +50,67 @@ class ProviderRegistry:
         """Refresh model lists from all providers."""
         result: dict[str, list[ModelInfo]] = {}
         new_index: dict[str, tuple[BaseProvider, ModelInfo]] = {}
+        new_full: list[tuple[BaseProvider, ModelInfo]] = []
 
         failed: list[tuple[str, Exception]] = []
         for pid, provider in self._providers.items():
             try:
-                # Clear provider cache to force fresh fetch from API
                 provider.clear_cache()
                 models = await provider.list_models()
                 result[pid] = models
                 for m in models:
-                    new_index[m.id] = (provider, m)
+                    # Full list keeps everything (including duplicates)
+                    new_full.append((provider, m))
+
+                    # Quick index: direct providers win over aggregators
+                    existing = new_index.get(m.id)
+                    if existing is not None:
+                        existing_is_aggregator = existing[0].id in _AGGREGATOR_PROVIDERS
+                        new_is_aggregator = pid in _AGGREGATOR_PROVIDERS
+                        if existing_is_aggregator and not new_is_aggregator:
+                            new_index[m.id] = (provider, m)
+                    else:
+                        new_index[m.id] = (provider, m)
             except Exception as e:
                 logger.error("Failed to refresh models for %s: %s", pid, e)
                 result[pid] = []
                 failed.append((pid, e))
 
-        # Update index with whatever succeeded — one provider's failure
-        # shouldn't take down the others.
         if new_index or not failed:
             self._model_index = new_index
+            self._full_models = new_full
 
-        # If ALL providers failed, raise the first error so callers
-        # (e.g. startup token refresh) can still react.
         if failed and not new_index:
             raise failed[0][1]
 
         logger.info(
-            "Model index: %d models across %d providers",
+            "Model index: %d unique models, %d total across %d providers",
             len(self._model_index),
+            len(self._full_models),
             len(self._providers),
         )
         return result
 
-    def resolve_model(self, model_id: str) -> tuple[BaseProvider, ModelInfo] | None:
-        """Resolve a model ID to its provider and info."""
+    def resolve_model(
+        self,
+        model_id: str,
+        provider_id: str | None = None,
+    ) -> tuple[BaseProvider, ModelInfo] | None:
+        """Resolve a model ID to its provider and info.
+
+        If provider_id is given, returns the model from that specific provider.
+        Otherwise falls back to the default priority (direct > aggregator).
+        """
+        if provider_id:
+            for p, m in self._full_models:
+                if m.id == model_id and p.id == provider_id:
+                    return (p, m)
+            # Provider specified but not found — fall through to default
         return self._model_index.get(model_id)
 
     def all_models(self) -> list[ModelInfo]:
-        """All indexed models."""
-        return [info for _, info in self._model_index.values()]
+        """All models from all providers (includes duplicates from different providers)."""
+        return [info for _, info in self._full_models]
 
     async def health(self) -> dict[str, ProviderStatus]:
         """Health check all providers."""

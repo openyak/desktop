@@ -73,19 +73,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Provider registry
     registry = ProviderRegistry()
 
-    # If OpenYak proxy is configured, use it as the provider (billing mode).
-    # Otherwise fall back to user's own OpenRouter key (local mode).
+    # If OpenYak proxy is configured, register it as "openyak-proxy" (billing mode).
+    # This is separate from the user's own OpenRouter key.
     if settings.proxy_url and settings.proxy_token:
-        provider = OpenRouterProvider(
+        proxy_provider = OpenRouterProvider(
             settings.proxy_token,
             base_url=settings.proxy_url + "/v1",
+            provider_id="openyak-proxy",
         )
-        registry.register(provider)
+        registry.register(proxy_provider)
         try:
             await registry.refresh_models()
         except Exception as e:
             logger.warning("Failed to load models from proxy on startup: %s", e)
-            # Token may be expired — try refreshing it
             if settings.proxy_refresh_token:
                 from app.provider.proxy_auth import refresh_proxy_token
                 if await refresh_proxy_token(settings, registry):
@@ -93,15 +93,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         await registry.refresh_models()
                     except Exception as e2:
                         logger.warning("Still failed after token refresh: %s", e2)
-    elif settings.openrouter_api_key:
-        provider = OpenRouterProvider(settings.openrouter_api_key)
-        registry.register(provider)
-        try:
-            await registry.refresh_models()
-        except Exception as e:
-            logger.warning("Failed to load models on startup: %s — will retry on first request", e)
-    else:
-        logger.warning("No OPENROUTER_API_KEY set — provider disabled")
 
     # Register OpenAI subscription provider if configured
     if settings.openai_oauth_access_token and settings.openai_oauth_account_id:
@@ -174,6 +165,61 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     logger.debug("Ollama warmup skipped for %s: %s", model, exc)
 
             asyncio.create_task(_warmup_model(ollama_provider._base_url, last_model))
+
+    # Pre-fetch models.dev catalog (remote model metadata: pricing, capabilities)
+    from app.provider.models_dev import models_dev
+    try:
+        await models_dev.refresh()
+    except Exception as e:
+        logger.warning("models.dev pre-fetch failed: %s — will use cached/hardcoded data", e)
+
+    # Schedule hourly background refresh
+    async def _models_dev_refresh_loop() -> None:
+        import asyncio
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                await models_dev.refresh()
+            except Exception:
+                pass
+
+    asyncio.create_task(_models_dev_refresh_loop())
+
+    # Auto-register BYOK providers (OpenAI, Anthropic, Gemini, Groq, etc.)
+    from app.provider.catalog import PROVIDER_CATALOG
+    from app.provider.factory import create_provider as create_desktop_provider
+
+    disabled = {s.strip() for s in settings.disabled_providers.split(",") if s.strip()}
+
+    byok_registered = 0
+    for pid, pdef in PROVIDER_CATALOG.items():
+        if pid in disabled:
+            continue
+        api_key = getattr(settings, pdef.settings_key, "")
+        if not api_key:
+            continue
+        try:
+            # Azure needs a user-provided base_url
+            extra_kwargs: dict[str, str] = {}
+            if pdef.kind == "openai_compat_azure":
+                azure_url = getattr(settings, "azure_openai_base_url", "")
+                if not azure_url:
+                    logger.warning("Azure API key set but OPENYAK_AZURE_OPENAI_BASE_URL is missing — skipping")
+                    continue
+                extra_kwargs["base_url"] = azure_url
+
+            provider = create_desktop_provider(pid, api_key, **extra_kwargs)
+            registry.register(provider)
+            byok_registered += 1
+            logger.info("Registered BYOK provider: %s", pid)
+        except Exception as e:
+            logger.warning("Failed to register provider %s: %s", pid, e)
+
+    if byok_registered:
+        try:
+            await registry.refresh_models()
+        except Exception as e:
+            logger.warning("Model refresh failed after BYOK registration: %s", e)
 
     app.state.provider_registry = registry
 

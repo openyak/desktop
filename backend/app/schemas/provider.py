@@ -64,3 +64,21 @@ class ApiKeyStatus(BaseModel):
     is_configured: bool = False
     masked_key: str | None = None
     is_valid: bool | None = None
+
+
+class ProviderKeyUpdate(BaseModel):
+    """Request to set/update an API key for any provider."""
+
+    api_key: str
+
+
+class ProviderInfo(BaseModel):
+    """Summary info for a provider (used in GET /config/providers)."""
+
+    id: str
+    name: str
+    is_configured: bool = False
+    enabled: bool = True  # False = key set but provider disabled by user
+    masked_key: str | None = None
+    model_count: int = 0
+    status: str = "unconfigured"  # "connected" | "error" | "unconfigured" | "disabled"

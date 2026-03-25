@@ -8,8 +8,10 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from app.provider.catalog import PROVIDER_CATALOG
+from app.provider.factory import create_provider as create_desktop_provider
 from app.provider.openrouter import OpenRouterProvider
-from app.schemas.provider import ApiKeyStatus, ApiKeyUpdate
+from app.schemas.provider import ApiKeyStatus, ApiKeyUpdate, ProviderInfo, ProviderKeyUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +184,7 @@ async def connect_openyak_account(request: Request, body: OpenYakAccountConnect)
         raise HTTPException(400, "proxy_url and token are required")
 
     # Validate by trying to list models through the proxy
-    test_provider = OpenRouterProvider(token, base_url=proxy_url + "/v1")
+    test_provider = OpenRouterProvider(token, base_url=proxy_url + "/v1", provider_id="openyak-proxy")
     try:
         models = await test_provider.list_models()
         if not models:
@@ -195,7 +197,7 @@ async def connect_openyak_account(request: Request, body: OpenYakAccountConnect)
 
     # Switch the provider registry to use the proxy
     registry = request.app.state.provider_registry
-    new_provider = OpenRouterProvider(token, base_url=proxy_url + "/v1")
+    new_provider = OpenRouterProvider(token, base_url=proxy_url + "/v1", provider_id="openyak-proxy")
     registry.register(new_provider)
     try:
         await registry.refresh_models()
@@ -229,15 +231,9 @@ async def disconnect_openyak_account(request: Request) -> OpenYakAccountStatus:
     _update_env_file("OPENYAK_PROXY_TOKEN", "")
     _remove_env_key("OPENYAK_PROXY_REFRESH_TOKEN")
 
-    # Re-init provider with local key if available
+    # Unregister proxy provider
     registry = request.app.state.provider_registry
-    if settings.openrouter_api_key:
-        provider = OpenRouterProvider(settings.openrouter_api_key)
-        registry.register(provider)
-        try:
-            await registry.refresh_models()
-        except Exception as e:
-            logger.warning("Model refresh failed after disconnect: %s — will retry on next request", e)
+    registry.unregister("openyak-proxy")
 
     return OpenYakAccountStatus(is_connected=False)
 
@@ -325,3 +321,215 @@ async def disconnect_ollama(request: Request) -> OllamaStatus:
     registry.unregister("ollama")
 
     return OllamaStatus(is_configured=False)
+
+
+# ── Generic Multi-Provider API ─────────────────────────────────────────────
+
+
+def _get_disabled_set(settings: Any) -> set[str]:
+    return {s.strip() for s in settings.disabled_providers.split(",") if s.strip()}
+
+
+@router.get("/config/providers", response_model=list[ProviderInfo])
+async def list_providers(request: Request) -> list[ProviderInfo]:
+    """List all BYOK providers with their configuration status."""
+    settings = request.app.state.settings
+    registry = request.app.state.provider_registry
+    disabled = _get_disabled_set(settings)
+
+    result: list[ProviderInfo] = []
+    for pid, pdef in PROVIDER_CATALOG.items():
+        api_key = getattr(settings, pdef.settings_key, "")
+        is_disabled = pid in disabled
+        provider = registry.get_provider(pid)
+
+        if api_key and is_disabled:
+            result.append(ProviderInfo(
+                id=pid,
+                name=pdef.name,
+                is_configured=True,
+                enabled=False,
+                masked_key=_mask_key(api_key),
+                status="disabled",
+            ))
+        elif provider and api_key:
+            models = [m for p, m in registry._full_models if m.provider_id == pid]
+            result.append(ProviderInfo(
+                id=pid,
+                name=pdef.name,
+                is_configured=True,
+                enabled=True,
+                masked_key=_mask_key(api_key),
+                model_count=len(models),
+                status="connected",
+            ))
+        elif api_key:
+            result.append(ProviderInfo(
+                id=pid,
+                name=pdef.name,
+                is_configured=True,
+                enabled=True,
+                masked_key=_mask_key(api_key),
+                status="error",
+            ))
+        else:
+            result.append(ProviderInfo(
+                id=pid,
+                name=pdef.name,
+                is_configured=False,
+                enabled=not is_disabled,
+                status="unconfigured",
+            ))
+
+    return result
+
+
+@router.post("/config/providers/{provider_id}/key", response_model=ProviderInfo)
+async def set_provider_key(
+    provider_id: str, body: ProviderKeyUpdate, request: Request,
+) -> ProviderInfo:
+    """Set/update API key for a provider. Validates, registers, and persists."""
+    pdef = PROVIDER_CATALOG.get(provider_id)
+    if not pdef:
+        raise HTTPException(404, f"Unknown provider: {provider_id}")
+
+    api_key = body.api_key.strip()
+    if not api_key:
+        raise HTTPException(400, "API key cannot be empty")
+
+    # Azure needs a base_url from the request body or existing settings
+    extra_kwargs: dict[str, str] = {}
+    settings = request.app.state.settings
+    if pdef.kind == "openai_compat_azure":
+        azure_url = getattr(body, "base_url", None) or getattr(settings, "azure_openai_base_url", "")
+        if not azure_url:
+            raise HTTPException(400, "Azure requires OPENYAK_AZURE_OPENAI_BASE_URL to be set")
+        extra_kwargs["base_url"] = azure_url
+
+    # Validate by creating a test provider and listing models
+    try:
+        test_provider = create_desktop_provider(provider_id, api_key, **extra_kwargs)
+        models = await test_provider.list_models()
+    except ImportError as e:
+        raise HTTPException(
+            400,
+            f"Provider '{provider_id}' requires an additional package: {e}",
+        )
+    except Exception as e:
+        logger.warning("API key validation failed for %s: %s", provider_id, e)
+        raise HTTPException(400, f"API key validation failed: {e}")
+
+    # Register in the registry (replaces any existing instance)
+    registry = request.app.state.provider_registry
+    new_provider = create_desktop_provider(provider_id, api_key, **extra_kwargs)
+    registry.register(new_provider)
+
+    try:
+        await registry.refresh_models()
+    except Exception as e:
+        logger.warning(
+            "Model refresh failed after %s key update: %s — will retry on next request",
+            provider_id, e,
+        )
+
+    # Persist to .env
+    env_key = f"OPENYAK_{pdef.settings_key.upper()}"
+    _update_env_file(env_key, api_key)
+
+    # Update runtime settings
+    setattr(settings, pdef.settings_key, api_key)
+
+    return ProviderInfo(
+        id=provider_id,
+        name=pdef.name,
+        is_configured=True,
+        masked_key=_mask_key(api_key),
+        model_count=len(models),
+        status="connected",
+    )
+
+
+@router.delete("/config/providers/{provider_id}/key", response_model=ProviderInfo)
+async def delete_provider_key(provider_id: str, request: Request) -> ProviderInfo:
+    """Remove API key for a provider."""
+    pdef = PROVIDER_CATALOG.get(provider_id)
+    if not pdef:
+        raise HTTPException(404, f"Unknown provider: {provider_id}")
+
+    # Clear runtime settings
+    settings = request.app.state.settings
+    setattr(settings, pdef.settings_key, "")
+
+    # Remove from .env
+    env_key = f"OPENYAK_{pdef.settings_key.upper()}"
+    _remove_env_key(env_key)
+
+    # Unregister provider
+    registry = request.app.state.provider_registry
+    registry.unregister(provider_id)
+
+    return ProviderInfo(
+        id=provider_id,
+        name=pdef.name,
+        is_configured=False,
+        status="unconfigured",
+    )
+
+
+@router.post("/config/providers/{provider_id}/toggle", response_model=ProviderInfo)
+async def toggle_provider(provider_id: str, request: Request) -> ProviderInfo:
+    """Enable or disable a provider. Disabled providers keep their key but aren't used."""
+    pdef = PROVIDER_CATALOG.get(provider_id)
+    if not pdef:
+        raise HTTPException(404, f"Unknown provider: {provider_id}")
+
+    settings = request.app.state.settings
+    registry = request.app.state.provider_registry
+    disabled = _get_disabled_set(settings)
+
+    api_key = getattr(settings, pdef.settings_key, "")
+    is_currently_disabled = provider_id in disabled
+
+    if is_currently_disabled:
+        # Enable: remove from disabled list, register provider
+        disabled.discard(provider_id)
+        if api_key:
+            try:
+                extra_kwargs: dict[str, str] = {}
+                if pdef.kind == "openai_compat_azure":
+                    azure_url = getattr(settings, "azure_openai_base_url", "")
+                    if azure_url:
+                        extra_kwargs["base_url"] = azure_url
+                provider = create_desktop_provider(provider_id, api_key, **extra_kwargs)
+                registry.register(provider)
+                await registry.refresh_models()
+            except Exception as e:
+                logger.warning("Failed to enable provider %s: %s", provider_id, e)
+    else:
+        # Disable: add to disabled list, unregister provider
+        disabled.add(provider_id)
+        registry.unregister(provider_id)
+
+    # Persist disabled list
+    settings.disabled_providers = ",".join(sorted(disabled))
+    _update_env_file("OPENYAK_DISABLED_PROVIDERS", settings.disabled_providers)
+
+    # Build response
+    provider = registry.get_provider(provider_id)
+    new_enabled = provider_id not in disabled
+    if new_enabled and provider and api_key:
+        models = [m for p, m in registry._full_models if m.provider_id == provider_id]
+        return ProviderInfo(
+            id=provider_id, name=pdef.name, is_configured=True, enabled=True,
+            masked_key=_mask_key(api_key), model_count=len(models), status="connected",
+        )
+    elif api_key and not new_enabled:
+        return ProviderInfo(
+            id=provider_id, name=pdef.name, is_configured=True, enabled=False,
+            masked_key=_mask_key(api_key), status="disabled",
+        )
+    else:
+        return ProviderInfo(
+            id=provider_id, name=pdef.name, is_configured=bool(api_key),
+            enabled=new_enabled, status="unconfigured",
+        )

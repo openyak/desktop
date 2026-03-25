@@ -48,6 +48,7 @@ class OpenRouterProvider(OpenAICompatProvider):
         api_key: str,
         *,
         base_url: str | None = None,
+        provider_id: str = "openrouter",
         enable_reasoning: bool = True,
         cache_ttl_hours: int = 24,
     ):
@@ -61,6 +62,7 @@ class OpenRouterProvider(OpenAICompatProvider):
             },
         )
         self._api_key = api_key
+        self._provider_id = provider_id
         self._enable_reasoning = enable_reasoning
         self._models_cache: list[ModelInfo] | None = None
         self._cache_timestamp: float | None = None  # Unix timestamp of last cache update
@@ -71,7 +73,7 @@ class OpenRouterProvider(OpenAICompatProvider):
 
     @property
     def id(self) -> str:
-        return "openrouter"
+        return self._provider_id
 
     async def list_models(self) -> list[ModelInfo]:
         """Fetch models from OpenRouter API.
@@ -147,7 +149,7 @@ class OpenRouterProvider(OpenAICompatProvider):
                 ModelInfo(
                     id=model_id,
                     name=raw_name,
-                    provider_id="openrouter",
+                    provider_id=self._provider_id,
                     capabilities=ModelCapabilities(
                         function_calling="tool" in str(m.get("supported_parameters", [])),
                         vision="image" in modality,
@@ -180,7 +182,7 @@ class OpenRouterProvider(OpenAICompatProvider):
                     ModelInfo(
                         id=virtual_id,
                         name=display_name,
-                        provider_id="openrouter",
+                        provider_id=self._provider_id,
                         capabilities=source.capabilities,
                         pricing=ModelPricing(prompt=0, completion=0),
                         metadata=source.metadata,

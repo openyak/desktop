@@ -19,6 +19,8 @@ dependencies = [
     # LLM client
     "openai>=1.60.0",
     "httpx>=0.28.0",
+    "anthropic>=0.40.0",
+    "google-genai>=1.0.0",
 
     # Utilities
     "python-ulid>=3.0.0",
@@ -44,6 +46,7 @@ dependencies = [
 [project.optional-dependencies]
 mcp = ["mcp>=1.0.0"]
 local = ["litellm>=1.55.0"]
+yakagent = ["yakagent>=0.1.0"]
 office = [
     "pdfplumber>=0.11.0",
 ]

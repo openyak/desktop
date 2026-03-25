@@ -5,9 +5,12 @@ import { useModels } from "@/hooks/use-models";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { ActiveProvider } from "@/stores/settings-store";
 
-const PROVIDER_ID_MAP: Record<NonNullable<ActiveProvider>, string> = {
-  openyak: "openrouter",
-  byok: "openrouter",
+/** Provider IDs that are NOT user-managed BYOK providers. */
+const NON_BYOK_PROVIDERS = new Set(["openai-subscription", "ollama", "openyak-proxy"]);
+
+const PROVIDER_ID_MAP: Record<NonNullable<ActiveProvider>, string | null> = {
+  openyak: "openyak-proxy",
+  byok: null, // Special: show models from ALL BYOK providers
   chatgpt: "openai-subscription",
   ollama: "ollama",
 };
@@ -18,10 +21,16 @@ export function useProviderModels() {
 
   const data = useMemo(() => {
     if (!allModels) return [];
-    // No provider selected → return empty (NOT all models).
-    // This prevents the model dropdown from showing mixed models during loading.
     if (!activeProvider) return [];
+
     const providerId = PROVIDER_ID_MAP[activeProvider];
+
+    if (providerId === null) {
+      // "byok" mode: show models from all BYOK providers
+      // (everything except subscription, ollama, and openyak proxy)
+      return allModels.filter((m) => !NON_BYOK_PROVIDERS.has(m.provider_id));
+    }
+
     return allModels.filter((m) => m.provider_id === providerId);
   }, [allModels, activeProvider]);
 

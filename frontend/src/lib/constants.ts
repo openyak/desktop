@@ -148,6 +148,9 @@ export const API = {
   USAGE: "/api/usage",
   CONFIG: {
     API_KEY: "/api/config/api-key",
+    PROVIDERS: "/api/config/providers",
+    PROVIDER_KEY: (id: string) => `/api/config/providers/${id}/key` as const,
+    PROVIDER_TOGGLE: (id: string) => `/api/config/providers/${id}/toggle` as const,
     OPENYAK_ACCOUNT: "/api/config/openyak-account",
     OPENAI_SUBSCRIPTION: "/api/config/openai-subscription",
     OPENAI_SUBSCRIPTION_LOGIN: "/api/config/openai-subscription/login",
@@ -246,6 +249,7 @@ export const queryKeys = {
   skills: ["skills"] as const,
   usage: (days: number) => ["usage", days] as const,
   apiKeyStatus: ["apiKeyStatus"] as const,
+  providers: ["providers"] as const,
   openyakAccount: ["openyakAccount"] as const,
   openaiSubscription: ["openaiSubscription"] as const,
   ollamaStatus: ["ollamaStatus"] as const,
