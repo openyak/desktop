@@ -59,7 +59,11 @@ export const SessionItem = memo(function SessionItem({
   const itemRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLParagraphElement>(null);
 
-  const title = session.title || t('newConversation');
+  const rawTitle = session.title || t('newConversation');
+  // Clean up ugly channel titles: "Channel: whatsapp:+1234567890" → "+1234567890"
+  const title = rawTitle.startsWith("Channel: ")
+    ? rawTitle.slice(9).replace(/^(whatsapp|discord|telegram|slack|feishu|signal|line|imessage):/, "")
+    : rawTitle;
 
   // Focus the item when it receives roving tabindex focus
   useEffect(() => {

@@ -125,19 +125,100 @@ def _extract_prompt(messages: list[ChatMessage]) -> tuple[str, str | None]:
     """Extract prompt text and optional system context from OpenAI messages.
 
     Returns (user_text, system_text).
+    OpenClaw system messages (gateway status, metadata) are discarded to
+    avoid wasting tokens and confusing the agent.
     """
-    system_parts: list[str] = []
     user_text = ""
 
     for msg in messages:
         content = msg.content if isinstance(msg.content, str) else _content_to_text(msg.content)
-        if msg.role == "system":
-            system_parts.append(content)
-        elif msg.role == "user":
+        if msg.role == "user":
             user_text = content  # Last user message wins
 
-    system_text = "\n\n".join(system_parts) if system_parts else None
-    return user_text, system_text
+    # Strip OpenClaw metadata from user text (OpenClaw sometimes embeds
+    # system metadata directly in the user message content)
+    user_text = _strip_openclaw_metadata(user_text)
+
+    return user_text, None
+
+
+def _strip_openclaw_metadata(text: str) -> str:
+    """Remove OpenClaw system metadata embedded in user message text.
+
+    OpenClaw sometimes sends messages like:
+      System: [2026-03-26 17:00:46 EDT] WhatsApp gateway connected as +1234567890.
+      Conversation info (untrusted metadata):
+      ```json
+      { "message_id": "...", "sender_id": "...", "sender": "Alice" }
+      ```
+      Sender (untrusted metadata):
+      ```json
+      { "label": "Alice (+1234567890)", ... }
+      ```
+      actual user message here
+
+    We strip everything before the actual user message.
+    """
+    import re as _re
+
+    if not text:
+        return text
+
+    # Remove "System: [timestamp] ..." lines
+    text = _re.sub(r"System:\s*\[.*?\].*?(?:\n|$)", "", text)
+
+    # Remove metadata blocks: "Label (untrusted metadata):\n```json\n{...}\n```\n"
+    text = _re.sub(
+        r"(?:Conversation|Sender|Message|Channel)\s+(?:info\s+)?\(untrusted metadata\):\s*```(?:json)?\s*\{[^}]*\}\s*```\s*",
+        "",
+        text,
+        flags=_re.DOTALL | _re.IGNORECASE,
+    )
+
+    # Also handle without code fences: "Label (untrusted metadata):\n{...}\n"
+    text = _re.sub(
+        r"(?:Conversation|Sender|Message|Channel)\s+(?:info\s+)?\(untrusted metadata\):\s*\{[^}]*\}\s*",
+        "",
+        text,
+        flags=_re.DOTALL | _re.IGNORECASE,
+    )
+
+    return text.strip()
+
+
+def _extract_sender_info(messages: list[ChatMessage]) -> dict[str, str | None]:
+    """Extract sender name and other metadata from OpenClaw's system messages.
+
+    OpenClaw includes system messages like:
+      Conversation info (untrusted metadata):
+      { "sender": "Alice", "sender_id": "+1234567890" }
+      Sender (untrusted metadata):
+      { "label": "Alice (+1234567890)", "name": "Alice" }
+
+    Returns dict with keys: name, label, id.
+    """
+    import re as _re
+
+    info: dict[str, str | None] = {"name": None, "label": None, "id": None}
+
+    for msg in messages:
+        content = msg.content if isinstance(msg.content, str) else ""
+
+        # Find JSON blocks in both system and user messages
+        # (OpenClaw sometimes embeds metadata in user messages)
+        for match in _re.finditer(r"\{[^{}]+\}", content):
+            try:
+                data = json.loads(match.group())
+                if not info["name"]:
+                    info["name"] = data.get("sender") or data.get("name")
+                if not info["label"]:
+                    info["label"] = data.get("label")
+                if not info["id"]:
+                    info["id"] = data.get("sender_id") or data.get("id")
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+    return info
 
 
 def _content_to_text(content: Any) -> str:
@@ -182,7 +263,11 @@ async def _run_with_semaphore(sm: StreamManager, job: GenerationJob, coro) -> No
         sm._semaphore.release()
 
 
-async def _get_or_create_session(request: Request, channel_user_key: str) -> str:
+async def _get_or_create_session(
+    request: Request,
+    channel_user_key: str,
+    sender_name: str | None = None,
+) -> str:
     """Find existing session for a channel user or create a new one.
 
     Uses a simple lookup: search sessions whose slug matches the channel key.
@@ -203,16 +288,33 @@ async def _get_or_create_session(request: Request, channel_user_key: str) -> str
         session = result.scalar_one_or_none()
 
         if session:
+            # Auto-update ugly titles if we now have a sender name
+            if sender_name and (
+                session.title.startswith("Channel: ")
+                or session.title.startswith("System: ")
+            ):
+                session.title = sender_name
+                await db.commit()
             return session.id
 
-        # Create new session tagged with the channel user key
-        new_session = await create_session(
-            db,
-            title=f"Channel: {channel_user_key}",
-        )
+        # Build a nice title from sender info
+        title = sender_name or _pretty_channel_key(channel_user_key)
+
+        new_session = await create_session(db, title=title)
         new_session.slug = channel_user_key
         await db.commit()
         return new_session.id
+
+
+def _pretty_channel_key(key: str) -> str:
+    """Make a channel key human-readable.
+
+    'whatsapp:+14164197360' → '+14164197360'
+    'discord:user_123' → 'user_123'
+    """
+    if ":" in key:
+        return key.split(":", 1)[1]
+    return key
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +346,13 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
     """
     sm = _get_stream_manager(request)
 
+    # Extract sender info from OpenClaw's system messages (for session title)
+    sender_info = _extract_sender_info(body.messages)
+    sender_name = sender_info["name"] or sender_info["label"]
+
     # Resolve session
     if body.user:
-        session_id = await _get_or_create_session(request, body.user)
+        session_id = await _get_or_create_session(request, body.user, sender_name=sender_name)
     else:
         session_id = generate_ulid()
 

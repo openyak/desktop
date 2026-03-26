@@ -26,6 +26,9 @@ export function useSessions() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+    // Poll every 10s to catch channel messages (WhatsApp, Discord, etc.)
+    refetchInterval: 10_000,
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       if (lastPage.length < PAGE_SIZE) return undefined;
       return lastPageParam + PAGE_SIZE;

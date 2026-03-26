@@ -306,6 +306,9 @@ class OpenClawManager:
         if self.is_running:
             return self.ws_url
 
+        # Clean up any orphaned gateway processes from previous runs
+        await self._kill_port_listeners(self._port)
+
         # Resolve openclaw — prefer running node + .mjs directly to avoid .cmd shim issues
         node, _ = self._find_node22()
         if not node:
@@ -366,29 +369,65 @@ class OpenClawManager:
         return self.ws_url
 
     async def stop(self) -> None:
-        """Stop the OpenClaw gateway process."""
-        if self._process is None:
-            return
+        """Stop the OpenClaw gateway process and any orphaned processes on the port."""
+        if self._process is not None:
+            pid = self._process.pid
+            logger.info("Stopping OpenClaw (pid=%d)...", pid)
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(pid), "/T", "/F"],
+                        capture_output=True, timeout=10,
+                    )
+                else:
+                    self._process.terminate()
+                    try:
+                        self._process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        self._process.kill()
+            except Exception as e:
+                logger.warning("Error stopping OpenClaw: %s", e)
+            self._process = None
 
-        pid = self._process.pid
-        logger.info("Stopping OpenClaw (pid=%d)...", pid)
+        # Kill any orphaned processes listening on our port (prevents ghost instances)
+        await self._kill_port_listeners(self._port)
 
-        try:
-            if sys.platform == "win32":
-                subprocess.run(
-                    ["taskkill", "/PID", str(pid), "/T", "/F"],
-                    capture_output=True, timeout=10,
+    @staticmethod
+    async def _kill_port_listeners(port: int) -> None:
+        """Kill any process listening on the given port (cleanup orphaned gateways)."""
+        if sys.platform == "win32":
+            try:
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["netstat", "-ano"],
+                    capture_output=True, text=True, timeout=5,
                 )
-            else:
-                self._process.terminate()
-                try:
-                    self._process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    self._process.kill()
-        except Exception as e:
-            logger.warning("Error stopping OpenClaw: %s", e)
-
-        self._process = None
+                import re as _re
+                for line in result.stdout.splitlines():
+                    if f":{port}" in line and "LISTENING" in line:
+                        parts = line.split()
+                        pid = parts[-1]
+                        if pid.isdigit() and int(pid) > 0:
+                            logger.info("Killing orphaned process on port %d (pid=%s)", port, pid)
+                            subprocess.run(
+                                ["taskkill", "/PID", pid, "/T", "/F"],
+                                capture_output=True, timeout=5,
+                            )
+            except Exception as e:
+                logger.debug("Port cleanup failed: %s", e)
+        else:
+            try:
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["lsof", "-ti", f":{port}"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                for pid in result.stdout.strip().split():
+                    if pid.isdigit():
+                        logger.info("Killing orphaned process on port %d (pid=%s)", port, pid)
+                        os.kill(int(pid), 9)
+            except Exception as e:
+                logger.debug("Port cleanup failed: %s", e)
 
     async def _wait_for_health(self) -> None:
         """Poll until the gateway is responsive."""

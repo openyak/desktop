@@ -29,6 +29,8 @@ export function useMessages(sessionId: string | undefined) {
     enabled: !!sessionId,
     refetchOnWindowFocus: true,
     staleTime: 5_000, // Refetch if data is older than 5s (catches remote-generated sessions)
+    // Poll every 10s to catch channel messages (WhatsApp, Discord, etc.)
+    refetchInterval: 10_000,
     placeholderData: keepPreviousData,
   });
 
