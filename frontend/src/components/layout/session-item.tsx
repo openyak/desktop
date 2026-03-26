@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useTranslation } from 'react-i18next';
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Trash2, Pencil, FileDown, FileText, FolderOpen, Pin, PinOff } from "lucide-react";
+import { Trash2, Pencil, FileDown, FileText, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
@@ -54,8 +54,10 @@ export const SessionItem = memo(function SessionItem({
   const queryClient = useQueryClient();
   const { prefetch, cancel } = useDebouncedPrefetch(150);
   const [editValue, setEditValue] = useState("");
+  const [scrollVars, setScrollVars] = useState<React.CSSProperties | undefined>();
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLParagraphElement>(null);
 
   const title = session.title || t('newConversation');
 
@@ -76,6 +78,21 @@ export const SessionItem = memo(function SessionItem({
       });
     }
   }, [isEditing, title]);
+
+  // Measure title overflow once on mount / title change
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) {
+      const dist = el.scrollWidth - el.clientWidth;
+      setScrollVars({
+        '--scroll-distance': `-${dist}px`,
+        '--scroll-duration': `${dist / 50}s`,
+      } as React.CSSProperties);
+    } else {
+      setScrollVars(undefined);
+    }
+  }, [title]);
 
   const handleSubmitRename = useCallback(() => {
     const trimmed = editValue.trim();
@@ -130,10 +147,10 @@ export const SessionItem = memo(function SessionItem({
             cancel();
           }}
           className={cn(
-            "relative flex items-center overflow-hidden rounded-xl px-3 py-3 mx-2 text-[13px] cursor-pointer transition-all duration-150",
+            "group relative flex items-center overflow-hidden rounded-xl px-3 py-3 mx-2 text-[13px] cursor-pointer transition-all duration-150 ease-out",
             isActive
-              ? "bg-[var(--sidebar-active)] text-[var(--text-primary)] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-4 before:w-0.5 before:rounded-full before:bg-[var(--text-primary)]"
-              : "text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]",
+              ? "bg-[var(--sidebar-active)] text-[var(--text-primary)] shadow-[var(--sidebar-active-shadow)] ring-1 ring-[var(--sidebar-active-border)]"
+              : "text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)] active:scale-[0.98]",
             isEditing && "ring-1 ring-[var(--brand-primary)]",
           )}
         >
@@ -153,13 +170,15 @@ export const SessionItem = memo(function SessionItem({
               </div>
             ) : (
               <>
-                <p className="truncate pr-2">{title}</p>
-                {session.directory && session.directory !== "." && !snippet && (
-                  <p className="truncate pr-2 text-[11px] text-[var(--text-tertiary)] mt-0.5 flex items-center gap-1">
-                    <FolderOpen className="inline h-3 w-3 shrink-0" />
-                    {session.directory.replace(/\\/g, "/").replace(/\/$/, "").split("/").pop()}
-                  </p>
-                )}
+                <p
+                  ref={titleRef}
+                  className="whitespace-nowrap overflow-hidden pr-2"
+                  style={scrollVars}
+                >
+                  <span className={scrollVars ? "inline-block group-hover:animate-scroll-text" : ""}>
+                    {title}
+                  </span>
+                </p>
                 {snippet && (
                   <p className="truncate pr-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
                     …{snippet}…

@@ -40,6 +40,8 @@
   --sidebar-bg: #FAFAFA;
   --sidebar-hover: #F0F0F0;
   --sidebar-active: #E8E8E8;
+  --sidebar-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sidebar-active-border: rgba(0, 0, 0, 0.04);
 
   /* User message bubble */
   --user-bubble-bg: #F7F7F8;
@@ -103,6 +105,8 @@
   --sidebar-bg: #080705;
   --sidebar-hover: #171511;
   --sidebar-active: #23201a;
+  --sidebar-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --sidebar-active-border: rgba(255, 255, 255, 0.04);
 
   /* User message bubble — distinct from background */
   --user-bubble-bg: #1c1a15;
@@ -712,6 +716,17 @@ pre code {
 }
 .csv-table tbody tr:hover {
   background: var(--surface-tertiary);
+}
+
+/* ─── Sidebar Title Scroll ─── */
+
+@keyframes scroll-text {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(var(--scroll-distance)); }
+}
+
+@utility animate-scroll-text {
+  animation: scroll-text var(--scroll-duration, 2s) linear forwards;
 }
 
 /* ─── Reduced Motion (Accessibility) ─── */

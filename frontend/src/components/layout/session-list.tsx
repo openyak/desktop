@@ -130,8 +130,7 @@ export function SessionList() {
     estimateSize: (index) => {
       const item = flatItems[index];
       if (item.type === "header") return index === 0 ? 32 : 40;
-      const hasExtra = (item.session.directory && item.session.directory !== ".") || item.snippet;
-      return hasExtra ? 58 : 46;
+      return item.snippet ? 58 : 46;
     },
     overscan: 10,
   });
