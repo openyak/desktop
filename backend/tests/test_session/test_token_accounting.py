@@ -36,18 +36,10 @@ def test_calculate_step_cost_zero_when_pricing_unavailable():
     assert _calculate_step_cost(usage, model) == 0.0
 
 
-def test_calculate_step_cost_with_markup():
+def test_calculate_step_cost_direct_usd_no_markup():
+    """Billing uses direct USD — no markup applied."""
     model = _model(prompt_per_million=2.0, completion_per_million=8.0)
     usage = {"input": 1_000, "output": 500, "reasoning": 500}
 
-    raw_cost = _calculate_step_cost(usage, model)
-    marked_up = _calculate_step_cost(usage, model, markup_percent=20.0)
-
-    assert raw_cost == 0.01
-    assert marked_up == round(0.01 * 1.2, 10)  # $0.012
-
-
-def test_calculate_step_cost_markup_zero_on_free_model():
-    model = _model(prompt_per_million=0.0, completion_per_million=0.0)
-    usage = {"input": 1000, "output": 1000, "reasoning": 0}
-    assert _calculate_step_cost(usage, model, markup_percent=20.0) == 0.0
+    cost = _calculate_step_cost(usage, model)
+    assert cost == 0.01

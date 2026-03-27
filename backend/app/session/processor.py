@@ -421,8 +421,6 @@ def _repair_tool_call_payload(
 def _calculate_step_cost(
     usage_data: dict[str, Any],
     model_info: Any,
-    *,
-    markup_percent: float = 0.0,
 ) -> float:
     """Calculate per-step USD cost from canonical token usage."""
     if not usage_data or not model_info or not model_info.pricing:
@@ -441,9 +439,6 @@ def _calculate_step_cost(
         input_tokens * prompt_price / 1_000_000
         + (output_tokens + reasoning_tokens) * completion_price / 1_000_000
     )
-
-    if markup_percent > 0:
-        raw_cost *= 1 + markup_percent / 100
 
     return raw_cost
 
@@ -1265,12 +1260,8 @@ class SessionProcessor:
             if sp.model_info.pricing and (
                 sp.model_info.pricing.prompt > 0 or sp.model_info.pricing.completion > 0
             ):
-                _cfg = get_settings()
-                _effective_markup = (
-                    _cfg.markup_percent if _cfg.proxy_url and _cfg.proxy_token else 0.0
-                )
                 self.step_cost = _calculate_step_cost(
-                    self.usage_data, sp.model_info, markup_percent=_effective_markup
+                    self.usage_data, sp.model_info
                 )
             else:
                 logger.warning(

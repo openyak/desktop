@@ -63,9 +63,6 @@ class Settings(BaseSettings):
     # --- Project ---
     project_dir: str = "."
 
-    # --- Billing ---
-    markup_percent: float = 0.0  # No markup — same price as OpenRouter (open-source)
-
     # --- Web Search ---
     daily_search_limit: int = 20  # Max free web_search calls per day (Free/BYOK)
 
