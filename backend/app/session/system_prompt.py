@@ -41,6 +41,11 @@ def build_system_prompt(
     env_info = _environment_section(directory, workspace=workspace, fts_status=fts_status)
     parts.append(env_info)
 
+    # Memory from previous sessions
+    memory = _memory_section(directory)
+    if memory:
+        parts.append(memory)
+
     # Project instructions (AGENTS.md, .openyak/instructions)
     project_instructions = _load_project_instructions(directory)
     if project_instructions:
@@ -52,6 +57,90 @@ def build_system_prompt(
         parts.append(skills_section)
 
     return "\n\n".join(parts)
+
+
+_MAX_MEMORY_CHARS = 8000  # ~2000 tokens hard ceiling
+
+
+def _memory_section(directory: str | None) -> str | None:
+    """Auto-discover memory files from .openyak/memory/ and build an index.
+
+    Scans all .md files in the directory, extracts the ``description`` field
+    from YAML frontmatter, and assembles a compact memory listing for the
+    system prompt.  No manually-maintained MEMORY.md index needed — the
+    backend builds it automatically.
+    """
+    if not directory:
+        return None
+
+    memory_dir = os.path.join(directory, ".openyak", "memory")
+    if not os.path.isdir(memory_dir):
+        return None
+
+    entries: list[str] = []
+    char_count = 0
+
+    for filename in sorted(os.listdir(memory_dir)):
+        if not filename.endswith(".md"):
+            continue
+
+        filepath = os.path.join(memory_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                raw = f.read(4096)  # read only head — description is in frontmatter
+        except OSError:
+            continue
+
+        desc = _extract_frontmatter_field(raw, "description")
+        if not desc:
+            continue
+
+        entry = f"- [{filename}] {desc}"
+        if char_count + len(entry) > _MAX_MEMORY_CHARS:
+            entries.append("...")
+            break
+        entries.append(entry)
+        char_count += len(entry)
+
+    if not entries:
+        return None
+
+    return (
+        "# Memory (from previous sessions)\n"
+        "Context learned from prior conversations. "
+        "Use the read tool on individual files for details.\n\n"
+        + "\n".join(entries)
+    )
+
+
+def _extract_frontmatter_field(text: str, field: str) -> str | None:
+    """Extract a single field value from YAML frontmatter.
+
+    Lightweight parser — avoids importing yaml for a simple key: value lookup.
+    Only works for scalar string values (no nested structures).
+    """
+    if not text.startswith("---"):
+        return None
+
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None
+
+    frontmatter = text[3:end]
+    prefix = f"{field}:"
+    for line in frontmatter.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            value = stripped[len(prefix):].strip()
+            # Remove surrounding quotes if present
+            if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
+                value = value[1:-1]
+            return value if value else None
+
+    return None
 
 
 def _environment_section(directory: str | None = None, *, workspace: str | None = None, fts_status: dict | None = None) -> str:
