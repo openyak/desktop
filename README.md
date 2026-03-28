@@ -9,6 +9,10 @@
 <p align="center"><strong>Your local AI agent — private, powerful, personal.</strong></p>
 
 <p align="center">
+  <img src="OpenYak-Logo/openyak-demo.gif" width="800" alt="OpenYak Demo" />
+</p>
+
+<p align="center">
   OpenYak is an open-source desktop AI assistant that runs entirely on your machine.<br/>
   Manage files, analyze data, draft documents, and automate office workflows — all without uploading anything to the cloud.
 </p>
