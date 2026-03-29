@@ -1,5 +1,5 @@
-"""Long-term memory system for cross-session fact persistence.
+"""Workspace-scoped memory system for cross-session context persistence.
 
-Extracts user preferences, project context, and factual knowledge from
-conversations and injects relevant facts into future system prompts.
+Agent-driven: the agent decides what to save via the memory tool.
+Memory is injected into future system prompts as <workspace-memory>.
 """

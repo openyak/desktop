@@ -10,7 +10,6 @@ class MemoryConfig(BaseModel):
 
     enabled: bool = True
     max_lines: int = Field(default=200, ge=10, le=500)
-    debounce_seconds: int = Field(default=10, ge=2, le=120)
 
 
 # Module-level default config

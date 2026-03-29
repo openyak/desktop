@@ -485,31 +485,6 @@ class SessionPrompt:
 
             # Handle processor result
             if result == "compact":
-                # Queue workspace memory BEFORE compaction so important info
-                # from messages about to be pruned is preserved in memory.
-                if self.workspace and self.workspace != ".":
-                    try:
-                        from app.memory.workspace_memory_queue import get_workspace_memory_queue
-
-                        _ws_mq = get_workspace_memory_queue()
-                        if _ws_mq is not None:
-                            async with self.session_factory() as db:
-                                async with db.begin():
-                                    _pre_msgs = await get_message_history_for_llm(
-                                        db, self.job.session_id
-                                    )
-                            _ws_mq.add(
-                                self.job.session_id,
-                                self.workspace,
-                                _pre_msgs,
-                                model_id=self.model_id,
-                            )
-                    except Exception:
-                        logger.debug(
-                            "Pre-compaction workspace memory queue failed",
-                            exc_info=True,
-                        )
-
                 await run_compaction(
                     self.job.session_id,
                     job=self.job,
@@ -688,31 +663,6 @@ class SessionPrompt:
                     logger.warning(
                         "Failed to persist title for %s", self.job.session_id
                     )
-
-        # Queue conversation for workspace memory refresh
-        if not self.job.abort_event.is_set() and self.workspace and self.workspace != ".":
-            try:
-                from app.memory.workspace_memory_queue import get_workspace_memory_queue
-                from app.session.manager import get_message_history_for_llm as _get_hist
-
-                ws_queue = get_workspace_memory_queue()
-                if ws_queue is not None:
-                    async with self.session_factory() as db:
-                        async with db.begin():
-                            _msgs = await _get_hist(db, self.job.session_id)
-                    ws_queue.add(
-                        self.job.session_id,
-                        self.workspace,
-                        _msgs,
-                        model_id=self.model_id,
-                    )
-                    logger.info(
-                        "Workspace memory: queued %s for refresh (%d messages)",
-                        self.workspace,
-                        len(_msgs),
-                    )
-            except Exception:
-                logger.warning("Workspace memory queue submission failed", exc_info=True)
 
         # Publish DONE to unlock the frontend UI.
         self.job.publish(
