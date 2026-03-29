@@ -54,11 +54,11 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
     const isFilePath = looksLikeFilePath(text);
 
     if (isFilePath) {
+      const hasFullPath = /[/\\]/.test(text);
       const canPreview = isPreviewableFile(text);
 
-      // For previewable files, make clickable — use existing artifact if available,
-      // otherwise open as file-preview (renderer fetches content from backend API)
-      if (canPreview) {
+      // Full path + previewable → clickable with artifact preview
+      if (hasFullPath && canPreview) {
         const artifacts = useArtifactStore.getState().artifacts;
         const fileName = text.split(/[\\/]/).pop() || text;
         const existing = artifacts.find(
@@ -94,21 +94,31 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
         );
       }
 
-      // Non-previewable file — open with system default program
-      const handleSystemOpen = () => {
-        api.post(API.FILES.OPEN_SYSTEM, { path: text }).catch(() => {});
-      };
+      // Full path + non-previewable → clickable with system open
+      if (hasFullPath) {
+        const handleSystemOpen = () => {
+          api.post(API.FILES.OPEN_SYSTEM, { path: text }).catch(() => {});
+        };
 
+        return (
+          <button
+            type="button"
+            onClick={handleSystemOpen}
+            className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)] hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] transition-colors cursor-pointer"
+            title="Open with system application"
+          >
+            <ExternalLink className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
+            <span>{children}</span>
+          </button>
+        );
+      }
+
+      // Bare filename (no path separator) → styled with file icon, not clickable
       return (
-        <button
-          type="button"
-          onClick={handleSystemOpen}
-          className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)] hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] transition-colors cursor-pointer"
-          title="Open with system application"
-        >
-          <ExternalLink className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
+        <span className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)]">
+          <FileText className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
           <span>{children}</span>
-        </button>
+        </span>
       );
     }
 
