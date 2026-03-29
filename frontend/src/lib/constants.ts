@@ -156,6 +156,7 @@ export const API = {
     OPENAI_SUBSCRIPTION_LOGIN: "/api/config/openai-subscription/login",
     OPENAI_SUBSCRIPTION_MANUAL_CALLBACK: "/api/config/openai-subscription/manual-callback",
     OLLAMA: "/api/config/ollama",
+    LOCAL_PROVIDER: "/api/config/local",
   },
   FTS: {
     INDEX: (workspace: string, sessionId?: string) =>
@@ -279,6 +280,7 @@ export const queryKeys = {
   providers: ["providers"] as const,
   openyakAccount: ["openyakAccount"] as const,
   openaiSubscription: ["openaiSubscription"] as const,
+  localProvider: ["localProvider"] as const,
   ollamaStatus: ["ollamaStatus"] as const,
   connectors: ["connectors"] as const,
   channels: ["channels"] as const,

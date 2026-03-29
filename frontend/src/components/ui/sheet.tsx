@@ -6,8 +6,45 @@ import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const Sheet = DialogPrimitive.Root;
-const SheetTrigger = DialogPrimitive.Trigger;
+const SheetIdContext = React.createContext<{ triggerId: string; contentId: string } | null>(null);
+
+const Sheet = ({
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) => {
+  const baseId = React.useId();
+  const contextValue = React.useMemo(
+    () => ({
+      triggerId: `sheet-trigger-${baseId}`,
+      contentId: `sheet-content-${baseId}`,
+    }),
+    [baseId],
+  );
+
+  return (
+    <DialogPrimitive.Root {...props}>
+      <SheetIdContext.Provider value={contextValue}>{children}</SheetIdContext.Provider>
+    </DialogPrimitive.Root>
+  );
+};
+
+const SheetTrigger = React.forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>
+>((props, ref) => {
+  const context = React.useContext(SheetIdContext);
+  const { id, ...rest } = props;
+  const ariaControls = (props as any)["aria-controls"] as string | undefined;
+  return (
+    <DialogPrimitive.Trigger
+      ref={ref}
+      id={id ?? context?.triggerId}
+      {...rest}
+      aria-controls={ariaControls ?? context?.contentId}
+    />
+  );
+});
+
 const SheetClose = DialogPrimitive.Close;
 const SheetPortal = DialogPrimitive.Portal;
 const SheetTitle = DialogPrimitive.Title;
@@ -34,6 +71,7 @@ const SheetContent = React.forwardRef<
     side?: "top" | "right" | "bottom" | "left";
   }
 >(({ side = "left", className, children, ...props }, ref) => {
+  const context = React.useContext(SheetIdContext);
   const sideClasses = {
     top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
     bottom: "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
@@ -45,6 +83,7 @@ const SheetContent = React.forwardRef<
     <SheetPortal>
       <SheetOverlay />
       <DialogPrimitive.Content
+        id={props.id ?? context?.contentId}
         ref={ref}
         className={cn(
           "fixed z-50 gap-4 bg-[var(--sidebar-bg)] p-0 shadow-[var(--shadow-lg)] transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300",

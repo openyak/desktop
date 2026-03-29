@@ -7,9 +7,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from urllib.parse import urlparse
 
 from app.provider.catalog import PROVIDER_CATALOG
 from app.provider.factory import create_provider as create_desktop_provider
+from app.provider.local import (
+    LOCAL_BASE_URL_ENV,
+    LOCAL_PROVIDER_ID,
+    create_local_provider,
+)
 from app.provider.openrouter import OpenRouterProvider
 from app.schemas.provider import ApiKeyStatus, ApiKeyUpdate, ProviderInfo, ProviderKeyUpdate
 
@@ -60,6 +66,46 @@ def _remove_env_key(key: str) -> None:
     lines = _ENV_PATH.read_text(encoding="utf-8").splitlines()
     lines = [l for l in lines if not l.startswith(f"{key}=") and not l.startswith(f"{key} =")]
     _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class LocalProviderStatus(BaseModel):
+    """Status for the locally-configured OpenAI-compatible endpoint."""
+
+    base_url: str = ""
+    is_configured: bool = False
+    is_connected: bool = False
+    status: str = "unconfigured"  # "connected" | "error" | "unconfigured"
+
+
+class LocalProviderUpdate(BaseModel):
+    """Request payload for configuring the local endpoint."""
+
+    base_url: str
+
+
+def _normalize_local_base_url(value: str) -> str:
+    """Normalize user input and ensure it includes a scheme."""
+    trimmed = value.strip()
+    if not trimmed:
+        raise HTTPException(400, "Base URL cannot be empty")
+    parsed = urlparse(trimmed)
+    if not parsed.scheme or not parsed.netloc:
+        raise HTTPException(400, "Base URL must include http:// or https://")
+    return trimmed.rstrip("/")
+
+
+def _local_provider_status(settings, registry) -> LocalProviderStatus:
+    """Build a status object from the current configuration + registry state."""
+    base_url = settings.local_base_url or ""
+    provider = registry.get_provider(LOCAL_PROVIDER_ID)
+    is_connected = bool(base_url and provider)
+    status = "connected" if is_connected else ("error" if base_url else "unconfigured")
+    return LocalProviderStatus(
+        base_url=base_url,
+        is_configured=bool(base_url),
+        is_connected=is_connected,
+        status=status,
+    )
 
 
 @router.get("/config/api-key", response_model=ApiKeyStatus)
@@ -533,3 +579,65 @@ async def toggle_provider(provider_id: str, request: Request) -> ProviderInfo:
             id=provider_id, name=pdef.name, is_configured=bool(api_key),
             enabled=new_enabled, status="unconfigured",
         )
+
+
+@router.get("/config/local", response_model=LocalProviderStatus)
+async def get_local_provider(request: Request) -> LocalProviderStatus:
+    """Return the stored local endpoint configuration."""
+    settings = request.app.state.settings
+    registry = request.app.state.provider_registry
+    return _local_provider_status(settings, registry)
+
+
+@router.post("/config/local", response_model=LocalProviderStatus)
+async def set_local_provider(request: Request, body: LocalProviderUpdate) -> LocalProviderStatus:
+    """Register a locally-hosted OpenAI-compatible endpoint."""
+    base_url = _normalize_local_base_url(body.base_url)
+    try:
+        test_provider = create_local_provider(base_url)
+        models = await test_provider.list_models()
+        if not models:
+            raise HTTPException(400, "Local endpoint returned no models")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("Local provider validation failed for %s: %s", base_url, e)
+        raise HTTPException(400, f"Local endpoint validation failed: {e}")
+
+    settings = request.app.state.settings
+    registry = request.app.state.provider_registry
+    registry.unregister(LOCAL_PROVIDER_ID)
+    registry.register(create_local_provider(base_url))
+
+    try:
+        await registry.refresh_models()
+    except Exception as e:
+        logger.warning("Model refresh failed after local provider registration: %s", e)
+
+    _update_env_file(LOCAL_BASE_URL_ENV, base_url)
+    settings.local_base_url = base_url
+
+    return LocalProviderStatus(
+        base_url=base_url,
+        is_configured=True,
+        is_connected=True,
+        status="connected",
+    )
+
+
+@router.delete("/config/local", response_model=LocalProviderStatus)
+async def delete_local_provider(request: Request) -> LocalProviderStatus:
+    """Remove the local endpoint configuration."""
+    settings = request.app.state.settings
+    settings.local_base_url = ""
+    _remove_env_key(LOCAL_BASE_URL_ENV)
+
+    registry = request.app.state.provider_registry
+    registry.unregister(LOCAL_PROVIDER_ID)
+
+    try:
+        await registry.refresh_models()
+    except Exception as e:
+        logger.warning("Model refresh failed after removing local provider: %s", e)
+
+    return LocalProviderStatus()

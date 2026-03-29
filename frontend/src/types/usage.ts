@@ -68,3 +68,10 @@ export interface ProviderInfo {
   model_count: number;
   status: "connected" | "error" | "unconfigured" | "disabled";
 }
+
+export interface LocalProviderStatus {
+  base_url: string;
+  is_configured: boolean;
+  is_connected: boolean;
+  status: "connected" | "error" | "unconfigured";
+}

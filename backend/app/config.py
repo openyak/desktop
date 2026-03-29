@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     ollama_auto_start: bool = True  # Auto-start managed Ollama binary on app launch
     ollama_last_model: str = ""  # Last-used model name for startup pre-warming
 
+    # --- Local OpenAI-compatible endpoint ---
+    local_base_url: str = ""  # OPENYAK_LOCAL_BASE_URL
+
     # --- Brave Search ---
     brave_search_api_key: str = ""
 

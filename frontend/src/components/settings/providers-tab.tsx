@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Eye, EyeOff, X, Check, Loader2, AlertCircle, LogOut, CreditCard, Mail, RotateCw, Cpu } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Eye, EyeOff, X, Check, Loader2, AlertCircle, LogOut, CreditCard, Mail, RotateCw, Cpu, Server } from "lucide-react";
 import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import { proxyApi, ProxyApiError } from "@/lib/proxy-api";
 import { API, IS_DESKTOP, queryKeys } from "@/lib/constants";
 import { desktopAPI } from "@/lib/tauri-api";
-import type { ApiKeyStatus, ProviderInfo } from "@/types/usage";
+import type { ApiKeyStatus, ProviderInfo, LocalProviderStatus } from "@/types/usage";
 import { OllamaPanel } from "@/components/settings/ollama-panel";
 
 interface OpenAISubscriptionStatus {
@@ -31,7 +31,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
   const { activeProvider, setActiveProvider } = useSettingsStore();
   const authStore = useAuthStore();
 
-  type ProviderMode = "openyak" | "byok" | "chatgpt" | "ollama";
+  type ProviderMode = "openyak" | "byok" | "chatgpt" | "ollama" | "local";
   const [viewingProvider, setViewingProvider] = useState<ProviderMode>(
     () => (activeProvider as ProviderMode) ?? "openyak"
   );
@@ -48,6 +48,8 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [verificationStep, setVerificationStep] = useState(false);
   const [codeInput, setCodeInput] = useState("");
+  const [localBaseUrlInput, setLocalBaseUrlInput] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const syncOpenYakAccountToBackend = async (proxyUrl: string, token: string, refreshToken?: string) => {
     const payload = { proxy_url: proxyUrl, token, ...(refreshToken && { refresh_token: refreshToken }) };
@@ -119,6 +121,27 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
     queryKey: queryKeys.providers,
     queryFn: () => api.get<ProviderInfo[]>(API.CONFIG.PROVIDERS),
   });
+
+  const { data: localStatus } = useQuery({
+    queryKey: queryKeys.localProvider,
+    queryFn: () => api.get<LocalProviderStatus>(API.CONFIG.LOCAL_PROVIDER),
+  });
+
+  useEffect(() => {
+    setLocalBaseUrlInput(localStatus?.base_url ?? "");
+  }, [localStatus?.base_url]);
+
+  const fallbackToOtherProviders = () => {
+    if (authStore.isConnected) {
+      setActiveProvider("openyak");
+    } else if (openaiSubStatus?.is_connected) {
+      setActiveProvider("chatgpt");
+    } else if (keyStatus?.is_configured || (providers ?? []).some((p) => p.is_configured)) {
+      setActiveProvider("byok");
+    } else {
+      setActiveProvider(null);
+    }
+  };
 
   const { data: openaiSubStatus, refetch: refetchOpenaiSub } = useQuery({
     queryKey: queryKeys.openaiSubscription,
@@ -204,6 +227,36 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
     },
   });
 
+  const updateLocalProvider = useMutation({
+    mutationFn: async (base_url: string) =>
+      api.post<LocalProviderStatus>(API.CONFIG.LOCAL_PROVIDER, { base_url }),
+    onSuccess: () => {
+      setLocalError(null);
+      qc.invalidateQueries({ queryKey: queryKeys.localProvider });
+      qc.invalidateQueries({ queryKey: queryKeys.models });
+      setActiveProvider("local");
+    },
+    onError: (err) => {
+      const detail = err instanceof ApiError ? ((err.body as any)?.detail ?? t('failedSaveKey')) : t('failedSaveKey');
+      setLocalError(detail);
+    },
+  });
+
+  const deleteLocalProvider = useMutation({
+    mutationFn: () => api.delete<LocalProviderStatus>(API.CONFIG.LOCAL_PROVIDER),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.localProvider });
+      qc.invalidateQueries({ queryKey: queryKeys.models });
+      if (activeProvider === "local") {
+        fallbackToOtherProviders();
+      }
+    },
+    onError: (err) => {
+      const detail = err instanceof ApiError ? ((err.body as any)?.detail ?? t('failedSaveKey')) : t('failedSaveKey');
+      setLocalError(detail);
+    },
+  });
+
   const openaiLoginMutation = useMutation({
     mutationFn: async () => {
       const resp = await api.post<{ auth_url: string }>(API.CONFIG.OPENAI_SUBSCRIPTION_LOGIN, {});
@@ -266,6 +319,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
           { mode: "byok" as ProviderMode, label: t('ownApiKey'), icon: Eye, connected: !!keyStatus?.is_configured || (providers ?? []).some((p) => p.is_configured) },
           { mode: "chatgpt" as ProviderMode, label: t('chatgptSubscription'), icon: CreditCard, connected: !!openaiSubStatus?.is_connected },
           { mode: "ollama" as ProviderMode, label: "Ollama", icon: Cpu, connected: ollamaConnected },
+          { mode: "local" as ProviderMode, label: t('localProvider'), icon: Server, connected: !!localStatus?.is_connected },
         ]).map(({ mode, label, icon: Icon, connected }) => (
           <button
             key={mode}
@@ -465,6 +519,64 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
 
       {/* Ollama (Local LLM) config */}
       {viewingProvider === "ollama" && <OllamaPanel />}
+      {/* Local OpenAI-compatible endpoint */}
+      {viewingProvider === "local" && (
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)]">{t('localProviderDesc')}</p>
+          {localStatus?.is_configured && (
+            <div className="flex items-center gap-2 text-xs">
+              <Check className="h-3.5 w-3.5 text-[var(--color-success)]" />
+              <span className="text-[var(--text-secondary)] font-mono">{localStatus.base_url}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setLocalError(null); deleteLocalProvider.mutate(); }}
+                disabled={deleteLocalProvider.isPending}
+              >
+                {deleteLocalProvider.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <LogOut className="h-3.5 w-3.5 mr-1" />}
+                {t('disconnect')}
+              </Button>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Input
+              type="text"
+              value={localBaseUrlInput}
+              onChange={(e) => setLocalBaseUrlInput(e.target.value)}
+              placeholder={t('localProviderUrlPlaceholder')}
+              className="font-mono text-xs"
+              autoComplete="one-time-code"
+              data-form-type="other"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  setLocalError(null);
+                  updateLocalProvider.mutate(localBaseUrlInput.trim());
+                }}
+                disabled={!localBaseUrlInput.trim() || updateLocalProvider.isPending}
+              >
+                {updateLocalProvider.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                {t('save')}
+              </Button>
+            </div>
+            {localError && (
+              <div className="flex items-center gap-1.5 text-xs text-[var(--color-destructive)]">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{localError}</span>
+              </div>
+            )}
+            {localStatus?.status === "error" && (
+              <div className="flex items-center gap-1.5 text-xs text-[var(--color-destructive)]">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{t('localProviderConnectError')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

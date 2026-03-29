@@ -22,6 +22,7 @@ from app.dependencies import set_session_factory
 from app.models.base import Base
 from app.agent.agent import AgentRegistry
 from app.provider.openrouter import OpenRouterProvider
+from app.provider.local import create_local_provider
 from app.provider.registry import ProviderRegistry
 from app.skill.registry import SkillRegistry
 from app.storage.database import create_engine, create_session_factory
@@ -203,6 +204,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     disabled = {s.strip() for s in settings.disabled_providers.split(",") if s.strip()}
 
     byok_registered = 0
+    should_refresh_models = False
     for pid, pdef in PROVIDER_CATALOG.items():
         if pid in disabled:
             continue
@@ -222,15 +224,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             provider = create_desktop_provider(pid, api_key, **extra_kwargs)
             registry.register(provider)
             byok_registered += 1
+            should_refresh_models = True
             logger.info("Registered BYOK provider: %s", pid)
         except Exception as e:
             logger.warning("Failed to register provider %s: %s", pid, e)
 
-    if byok_registered:
+    if settings.local_base_url:
+        try:
+            local_provider = create_local_provider(settings.local_base_url)
+            registry.register(local_provider)
+            should_refresh_models = True
+            logger.info("Registered local provider at %s", settings.local_base_url)
+        except Exception as e:
+            logger.warning("Failed to register local provider %s: %s", settings.local_base_url, e)
+
+    if should_refresh_models:
         try:
             await registry.refresh_models()
         except Exception as e:
-            logger.warning("Model refresh failed after BYOK registration: %s", e)
+            logger.warning("Model refresh failed after provider registration: %s", e)
 
     app.state.provider_registry = registry
 

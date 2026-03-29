@@ -13,6 +13,7 @@ const PROVIDER_ID_MAP: Record<NonNullable<ActiveProvider>, string | null> = {
   byok: null, // Special: show models from ALL BYOK providers
   chatgpt: "openai-subscription",
   ollama: "ollama",
+  local: "local",
 };
 
 export function useProviderModels() {
