@@ -59,13 +59,16 @@ jobs:
             desktop-tauri/src-tauri/target/release/bundle/nsis/*.exe.sig
 
   build-macos:
-    runs-on: macos-latest
-    env:
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: aarch64
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            arch: x64
     steps:
       - uses: actions/checkout@v4
 
@@ -81,11 +84,33 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: desktop-tauri/src-tauri
+
+      - name: Install Apple certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $RUNNER_TEMP/certificate.p12 \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
 
       - name: Install frontend dependencies
         run: cd frontend && npm ci --legacy-peer-deps
@@ -99,24 +124,125 @@ jobs:
       - name: Build backend (PyInstaller)
         run: |
           cd backend
+          python -m venv venv
+          source venv/bin/activate
           pip install -r requirements.txt pyinstaller
           pyinstaller openyak.spec --noconfirm
 
-      - name: Build Tauri (aarch64)
+      # Build Tauri WITHOUT notarization — we notarize manually after signing backend binaries
+      - name: Build Tauri (no notarization)
         run: |
           cd desktop-tauri
           npx @tauri-apps/cli build \
-            --target aarch64-apple-darwin \
-            --config '{"build":{"beforeBuildCommand":""},"bundle":{"targets":["dmg"]}}'
+            --target ${{ matrix.target }} \
+            --config '{"build":{"beforeBuildCommand":""},"bundle":{"targets":["dmg","app"]}}'
+
+      # Sign all PyInstaller backend binaries inside the .app bundle
+      - name: Sign backend binaries in bundle
+        env:
+          SIGNING_IDENTITY: "Developer ID Application: wangzhang wu (46KF5Z549N)"
+        run: |
+          BUNDLE_BACKEND="desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/OpenYak.app/Contents/Resources/backend"
+
+          # Sign all .dylib and .so files
+          find "$BUNDLE_BACKEND" -type f \( -name "*.dylib" -o -name "*.so" \) \
+            -exec codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" {} \;
+
+          # Sign backend executable
+          codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" "$BUNDLE_BACKEND/openyak-backend"
+
+          # Fix Python.framework symlink structure (Tauri resolves symlinks to regular files)
+          FW_PATH="$BUNDLE_BACKEND/_internal/Python.framework"
+          if [ -d "$FW_PATH" ]; then
+            # Remove broken top-level signature
+            rm -rf "$FW_PATH/_CodeSignature"
+
+            # Restore Python symlink
+            if [ -f "$FW_PATH/Python" ] && [ ! -L "$FW_PATH/Python" ]; then
+              rm "$FW_PATH/Python"
+              # Restore Versions/Current symlink
+              if [ ! -L "$FW_PATH/Versions/Current" ]; then
+                (cd "$FW_PATH/Versions" && ln -s 3.12 Current)
+              fi
+              ln -s Versions/Current/Python "$FW_PATH/Python"
+            fi
+
+            # Sign the actual versioned binary
+            codesign --force --options runtime --timestamp \
+              --sign "$SIGNING_IDENTITY" "$FW_PATH/Versions/3.12/Python"
+          fi
+
+          # Fix _internal/Python symlink
+          PYTHON_BIN="$BUNDLE_BACKEND/_internal/Python"
+          if [ -f "$PYTHON_BIN" ] && [ ! -L "$PYTHON_BIN" ]; then
+            rm "$PYTHON_BIN"
+            ln -s Python.framework/Versions/Current/Python "$PYTHON_BIN"
+          fi
+
+      # Re-sign the .app after modifying backend binaries
+      - name: Re-sign app bundle
+        env:
+          SIGNING_IDENTITY: "Developer ID Application: wangzhang wu (46KF5Z549N)"
+        run: |
+          APP_PATH="desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/OpenYak.app"
+          codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" "$APP_PATH/Contents/MacOS/openyak-desktop"
+          codesign --force --options runtime --timestamp \
+            --sign "$SIGNING_IDENTITY" "$APP_PATH"
+          codesign -v --deep "$APP_PATH"
+
+      # Notarize with Apple
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/OpenYak.app"
+          ditto -c -k --keepParent "$APP_PATH" /tmp/OpenYak-notarize.zip
+          xcrun notarytool submit /tmp/OpenYak-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$APP_PATH"
+
+      # Regenerate updater archive and DMG from notarized app
+      - name: Regenerate artifacts
+        env:
+          SIGNING_IDENTITY: "Developer ID Application: wangzhang wu (46KF5Z549N)"
+        run: |
+          BUNDLE_DIR="desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle"
+          VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+
+          # Regenerate updater tar.gz
+          cd "$BUNDLE_DIR/macos"
+          rm -f OpenYak.app.tar.gz OpenYak.app.tar.gz.sig
+          tar -czf OpenYak.app.tar.gz OpenYak.app
+          cd $GITHUB_WORKSPACE
+
+          # Sign tar.gz with Tauri updater key
+          npx @tauri-apps/cli signer sign "$BUNDLE_DIR/macos/OpenYak.app.tar.gz"
+
+          # Regenerate DMG
+          rm -f "$BUNDLE_DIR/dmg/"*.dmg
+          hdiutil create -volname "OpenYak" \
+            -srcfolder "$BUNDLE_DIR/macos/OpenYak.app" \
+            -ov -format UDZO \
+            "$BUNDLE_DIR/dmg/OpenYak_${VERSION}_${{ matrix.arch }}.dmg"
+          codesign --force --timestamp \
+            --sign "$SIGNING_IDENTITY" "$BUNDLE_DIR/dmg/"*.dmg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-bundle
+          name: macos-${{ matrix.arch }}-bundle
           path: |
-            desktop-tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            desktop-tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
-            desktop-tauri/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+            desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            desktop-tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
 
   publish:
     needs: [build-windows, build-macos]
@@ -140,21 +266,25 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/windows-bundle/**/*
-            artifacts/macos-bundle/**/*
+            artifacts/macos-aarch64-bundle/**/*
+            artifacts/macos-x64-bundle/**/*
 
       - name: Generate update manifest
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
-          REPO="${GITHUB_REPOSITORY}"
 
           # Read signatures
           WIN_SIG=$(cat artifacts/windows-bundle/*.exe.sig 2>/dev/null || echo "")
-          MAC_SIG=$(cat artifacts/macos-bundle/*.app.tar.gz.sig 2>/dev/null || echo "")
+          AARCH64_SIG=$(cat artifacts/macos-aarch64-bundle/*.app.tar.gz.sig 2>/dev/null || echo "")
+          X64_SIG=$(cat artifacts/macos-x64-bundle/*.app.tar.gz.sig 2>/dev/null || echo "")
 
-          # Find artifact filenames (exclude .sig files from .exe match)
-          WIN_EXE=$(find artifacts/windows-bundle -name '*.exe' ! -name '*.sig' -printf '%f' -quit 2>/dev/null || echo "")
-          MAC_TAR=$(find artifacts/macos-bundle -name '*.app.tar.gz' ! -name '*.sig' -printf '%f' -quit 2>/dev/null || echo "")
+          # Find artifact filenames
+          WIN_EXE=$(find artifacts/windows-bundle -name '*.exe' ! -name '*.sig' -exec basename {} \; | head -1)
+          AARCH64_TAR=$(find artifacts/macos-aarch64-bundle -name '*.app.tar.gz' ! -name '*.sig' -exec basename {} \; | head -1)
+          X64_TAR=$(find artifacts/macos-x64-bundle -name '*.app.tar.gz' ! -name '*.sig' -exec basename {} \; | head -1)
+
+          REPO="${GITHUB_REPOSITORY}"
 
           cat > latest.json <<EOF
           {
@@ -167,8 +297,12 @@ jobs:
                 "url": "https://github.com/${REPO}/releases/download/${TAG}/${WIN_EXE}"
               },
               "darwin-aarch64": {
-                "signature": "${MAC_SIG}",
-                "url": "https://github.com/${REPO}/releases/download/${TAG}/${MAC_TAR}"
+                "signature": "${AARCH64_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/${TAG}/${AARCH64_TAR}"
+              },
+              "darwin-x86_64": {
+                "signature": "${X64_SIG}",
+                "url": "https://github.com/${REPO}/releases/download/${TAG}/${X64_TAR}"
               }
             }
           }
