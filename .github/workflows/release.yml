@@ -45,10 +45,13 @@ jobs:
           pip install -r requirements.txt pyinstaller
           pyinstaller openyak.spec --noconfirm
 
+      - name: Download Node.js runtime
+        run: cd backend && python scripts/download_node.py
+
       - name: Build Tauri
         run: |
           cd desktop-tauri
-          npx @tauri-apps/cli build --config '{"build":{"beforeBuildCommand":""}}'
+          npx @tauri-apps/cli build --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -59,16 +62,16 @@ jobs:
             desktop-tauri/src-tauri/target/release/bundle/nsis/*.exe.sig
 
   build-macos:
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     strategy:
       matrix:
         include:
-          - runner: macos-latest
-            target: aarch64-apple-darwin
+          - target: aarch64-apple-darwin
             arch: aarch64
-          - runner: macos-latest
-            target: x86_64-apple-darwin
+            node_platform: Darwin-arm64
+          - target: x86_64-apple-darwin
             arch: x64
+            node_platform: Darwin-x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -128,6 +131,9 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt pyinstaller
           pyinstaller openyak.spec --noconfirm
+
+      - name: Download Node.js runtime
+        run: cd backend && python3 scripts/download_node.py --platform ${{ matrix.node_platform }}
 
       # Build Tauri WITHOUT notarization — we notarize manually after signing backend binaries
       - name: Build Tauri (no notarization)
