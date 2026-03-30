@@ -207,5 +207,7 @@
   "updateLater": "稍后",
   "updateDownloading": "正在下载更新...",
   "checkForUpdates": "检查更新",
-  "upToDate": "已是最新版本！"
+  "upToDate": "已是最新版本！",
+  "updateFailed": "更新失败",
+  "updateRetry": "重试"
 }

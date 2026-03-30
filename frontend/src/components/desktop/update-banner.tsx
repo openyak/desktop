@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 export function UpdateBanner() {
   const { t } = useTranslation("settings");
-  const { available, version, downloading, progress, downloadAndInstall, dismiss } = useUpdateCheck();
+  const { available, version, downloading, progress, error, downloadAndInstall, dismiss } = useUpdateCheck();
 
   return (
     <AnimatePresence>
@@ -21,7 +21,26 @@ export function UpdateBanner() {
           className="overflow-hidden"
         >
           <div className="flex items-center justify-center gap-3 px-4 py-1.5 text-xs font-medium bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]">
-            {downloading ? (
+            {error ? (
+              <>
+                <span className="text-[var(--color-destructive)]">{t("updateFailed")}: {error}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-2 text-xs font-semibold text-[var(--brand-primary)] hover:bg-[var(--brand-primary)]/20"
+                  onClick={downloadAndInstall}
+                >
+                  {t("updateRetry")}
+                </Button>
+                <button
+                  onClick={dismiss}
+                  className="ml-1 rounded p-0.5 hover:bg-[var(--brand-primary)]/20 transition-colors"
+                  aria-label={t("updateLater")}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </>
+            ) : downloading ? (
               <>
                 <div className="flex items-center gap-2">
                   <div className="h-1 w-24 rounded-full bg-[var(--brand-primary)]/20 overflow-hidden">

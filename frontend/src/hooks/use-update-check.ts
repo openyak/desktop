@@ -13,6 +13,7 @@ interface UpdateInfo {
   notes: string | null;
   downloading: boolean;
   progress: number;
+  error: string | null;
   downloadAndInstall: () => Promise<void>;
   dismiss: () => void;
   checkNow: () => Promise<void>;
@@ -25,6 +26,7 @@ export function useUpdateCheck(): UpdateInfo {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateRef = useRef<any>(null);
 
@@ -51,6 +53,7 @@ export function useUpdateCheck(): UpdateInfo {
     const update = updateRef.current;
     if (!update) return;
     setDownloading(true);
+    setError(null);
     let totalLength = 0;
     let downloaded = 0;
     try {
@@ -69,6 +72,8 @@ export function useUpdateCheck(): UpdateInfo {
       await relaunch();
     } catch (e) {
       console.error("Update install failed:", e);
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
       setDownloading(false);
     }
   }, []);
@@ -101,6 +106,7 @@ export function useUpdateCheck(): UpdateInfo {
     notes,
     downloading,
     progress,
+    error,
     downloadAndInstall,
     dismiss,
     checkNow,

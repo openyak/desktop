@@ -16,6 +16,7 @@ export function GeneralTab() {
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "up-to-date" | "downloading" | "error">("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!IS_DESKTOP) return;
@@ -47,6 +48,7 @@ export function GeneralTab() {
   const doUpdate = useCallback(async () => {
     if (!IS_DESKTOP) return;
     setUpdateStatus("downloading");
+    setUpdateError(null);
     try {
       const { check } = await import("@tauri-apps/plugin-updater");
       const update = await check();
@@ -64,9 +66,11 @@ export function GeneralTab() {
       });
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
-    } catch {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("Update install failed:", message);
+      setUpdateError(message);
       setUpdateStatus("error");
-      setTimeout(() => setUpdateStatus("idle"), 3000);
     }
   }, []);
 
@@ -217,9 +221,14 @@ export function GeneralTab() {
               </div>
             )}
             {updateStatus === "error" && (
-              <Button variant="outline" size="sm" className="text-xs h-7 text-[var(--color-destructive)]" onClick={checkForUpdate}>
-                {t('checkForUpdates')}
-              </Button>
+              <div className="space-y-1.5">
+                <Button variant="outline" size="sm" className="text-xs h-7 text-[var(--color-destructive)]" onClick={checkForUpdate}>
+                  {t('checkForUpdates')}
+                </Button>
+                {updateError && (
+                  <p className="text-[10px] text-[var(--color-destructive)] break-all">{updateError}</p>
+                )}
+              </div>
             )}
           </div>
         )}

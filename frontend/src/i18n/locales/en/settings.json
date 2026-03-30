@@ -207,5 +207,7 @@
   "updateLater": "Later",
   "updateDownloading": "Downloading update...",
   "checkForUpdates": "Check for Updates",
-  "upToDate": "You're up to date!"
+  "upToDate": "You're up to date!",
+  "updateFailed": "Update failed",
+  "updateRetry": "Retry"
 }
