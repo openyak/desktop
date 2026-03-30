@@ -49,9 +49,10 @@ jobs:
         run: cd backend && python scripts/download_node.py
 
       - name: Build Tauri
+        shell: bash
         run: |
           cd desktop-tauri
-          npx @tauri-apps/cli build --config "{\"build\":{\"beforeBuildCommand\":\"\"}}"
+          npx @tauri-apps/cli build --config '{"build":{"beforeBuildCommand":""}}'
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
