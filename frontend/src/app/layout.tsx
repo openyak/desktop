@@ -13,6 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
 });
 
+
 export const metadata: Metadata = {
   title: "OpenYak",
   description: "Your local AI assistant — private, powerful, personal",
@@ -29,6 +30,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <AppProviders>{children}</AppProviders>
       </body>

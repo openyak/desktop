@@ -21,6 +21,42 @@ interface TextPartProps {
   sources?: Source[];
 }
 
+// Extract plain text from React children (handles nested elements)
+function extractText(node: React.ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (!node) return "";
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (typeof node === "object" && "props" in node) {
+    const el = node as { props: { children?: React.ReactNode } };
+    return extractText(el.props.children);
+  }
+  return "";
+}
+
+// Detect key-value pattern: colon/fullwidth-colon within first 30 chars
+function isKeyValue(text: string): boolean {
+  const head = text.slice(0, 30);
+  return /[:：]/.test(head) && text.length < 80;
+}
+
+function ProseParagraph({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { children?: React.ReactNode }) {
+  const text = extractText(children);
+  const len = text.length;
+  const compact = len > 0 && len <= 60;
+  const kv = compact && isKeyValue(text);
+
+  const cls = cn(
+    kv ? "prose-kv" : compact ? "prose-compact" : undefined,
+  );
+
+  return (
+    <p className={cls || undefined} {...props}>
+      {children}
+    </p>
+  );
+}
+
 function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
@@ -144,39 +180,39 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
     : "Code";
 
   return (
-    <div className="group relative rounded-2xl overflow-hidden my-4 bg-[var(--code-block-bg)]">
-      <div className="flex items-center justify-between px-5 py-1.5">
-        <div className="flex items-center gap-2.5">
-          <svg className="w-4 h-4 text-[var(--code-block-text)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <div className="group relative rounded-2xl overflow-hidden my-6 bg-[var(--code-block-bg)] border border-[var(--code-block-border)]">
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 text-[var(--code-block-text)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          <span className="text-sm font-sans text-[var(--code-block-text)] select-none">{langDisplay}</span>
+          <span className="text-xs font-sans text-[var(--code-block-text)] select-none">{langDisplay}</span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {artifactType && (
             <button
               onClick={handleOpenInPanel}
-              className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-[var(--code-block-text)] hover:text-[var(--code-block-text-hover)] transition-colors"
+              className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-[var(--code-block-text)] hover:text-[var(--code-block-text-hover)] transition-colors"
               title="Open in panel"
             >
-              <PanelRight className="h-5 w-5" />
+              <PanelRight className="h-4 w-4" />
             </button>
           )}
           <button
             onClick={handleCopy}
-            className="p-2 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-[var(--code-block-text)] hover:text-[var(--code-block-text-hover)] transition-colors"
+            className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 text-[var(--code-block-text)] hover:text-[var(--code-block-text-hover)] transition-colors"
             title={copied ? "Copied!" : "Copy code"}
           >
             {copied ? (
-              <Check className="h-5 w-5 text-[var(--code-block-success)]" />
+              <Check className="h-4 w-4 text-[var(--code-block-success)]" />
             ) : (
-              <Copy className="h-5 w-5" />
+              <Copy className="h-4 w-4" />
             )}
           </button>
         </div>
       </div>
-      <div className="px-5 pb-4">
-        <pre className="overflow-x-auto text-sm leading-relaxed">
+      <div className="px-4 pb-4">
+        <pre className="overflow-x-auto text-[0.8125rem] leading-relaxed">
           <code className={`font-mono ${className}`} {...props}>
             {children}
           </code>
@@ -199,6 +235,13 @@ export const TextPart = memo(function TextPart({ data, isStreaming, sources = []
   const components = useMemo(
     () => ({
       code: CodeBlock,
+      p: ProseParagraph,
+      // Wrap tables in a rounded, scrollable container
+      table: ({ children }: { children?: React.ReactNode }) => (
+        <div className="prose-table-wrapper my-6 rounded-lg border border-[var(--border-default)] overflow-x-auto">
+          <table>{children}</table>
+        </div>
+      ),
       // Render matched links as citation badges, otherwise open in new tab
       a: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => {
         const source = href ? sourceMap.get(href) : undefined;
@@ -242,7 +285,7 @@ export const TextPart = memo(function TextPart({ data, isStreaming, sources = []
 
   return (
     <div className={cn(
-      "prose max-w-none text-[var(--text-primary)] leading-relaxed",
+      "prose max-w-none",
       isStreaming && "streaming-cursor",
     )}>
       <ReactMarkdown
