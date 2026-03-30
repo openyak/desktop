@@ -55,7 +55,21 @@
     },
     "macOS": {
       "minimumSystemVersion": "10.15",
-      "signingIdentity": "Developer ID Application: wangzhang wu (46KF5Z549N)"
+      "signingIdentity": "Developer ID Application: wangzhang wu (46KF5Z549N)",
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        }
+      }
     }
   },
   "plugins": {

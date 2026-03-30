@@ -226,12 +226,16 @@ jobs:
           # Sign tar.gz with Tauri updater key
           npx @tauri-apps/cli signer sign "$BUNDLE_DIR/macos/OpenYak.app.tar.gz"
 
-          # Regenerate DMG
+          # Regenerate DMG with Applications shortcut
           rm -f "$BUNDLE_DIR/dmg/"*.dmg
+          DMG_STAGING=$(mktemp -d)
+          cp -R "$BUNDLE_DIR/macos/OpenYak.app" "$DMG_STAGING/"
+          ln -s /Applications "$DMG_STAGING/Applications"
           hdiutil create -volname "OpenYak" \
-            -srcfolder "$BUNDLE_DIR/macos/OpenYak.app" \
+            -srcfolder "$DMG_STAGING" \
             -ov -format UDZO \
             "$BUNDLE_DIR/dmg/OpenYak_${VERSION}_${{ matrix.arch }}.dmg"
+          rm -rf "$DMG_STAGING"
           codesign --force --timestamp \
             --sign "$SIGNING_IDENTITY" "$BUNDLE_DIR/dmg/"*.dmg
 
