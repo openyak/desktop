@@ -19,6 +19,7 @@ venv*/
 
 # === Database & runtime data ===
 *.db
+data/
 backend/data/
 .openyakdb/
 backend/.openyak/
@@ -35,6 +36,8 @@ Thumbs.db
 .claude/
 CLAUDE.md
 cowork/
+docs/
+.harness/
 
 # === Ollama runtime binaries ===
 backend/ollama/
