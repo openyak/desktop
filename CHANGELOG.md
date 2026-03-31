@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), and this project
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-03-31
+
+### Fixed
+
+- **ci:** Overhaul macOS CI release workflow for reliable signing and notarization
+- **ci:** Overhaul CI release workflow structure
+- **ci:** Use `macos-latest` for x64 build (macos-13 deprecated)
+- **ci:** Add Node.js download step and fix Windows JSON quoting in CI
+- **ci:** Use bash shell for Windows Tauri build step
+- **desktop:** Show visible error message when auto-update fails
+- **desktop:** Add Applications shortcut to macOS DMG installer
+
+### Changed
+
+- **refactor:** Code quality overhaul — dead code removal, dependency injection unification, configurable limits, usage tracking
+- **refactor:** Decompose monolithic components and improve type safety
+
+### Added
+
+- **frontend:** Overhaul mobile remote UX — streaming responses, interactive elements, workspace access
+
 ## [1.0.2] - 2026-03-30
 
 ### Fixed
