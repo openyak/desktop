@@ -36,7 +36,7 @@ Thumbs.db
 .claude/
 CLAUDE.md
 cowork/
-docs/
+.dev/
 .harness/
 
 # === Ollama runtime binaries ===
