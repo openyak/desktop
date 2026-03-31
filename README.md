@@ -1,15 +1,10 @@
-[中文](README.zh-CN.md)
+# OpenYak
+
+**Your Local AI Agent — edit files, run workflows, and connect the models you want.**
 
 <p align="center">
-  <img src="OpenYak-Logo/mascot.png" width="200" alt="OpenYak Mascot" />
-</p>
-
-<h1 align="center">Yak is all you need.</h1>
-
-<p align="center"><strong>Your Local AI Agent — edit files, run workflows, and connect the models you want.</strong></p>
-
-<p align="center">
-  <a href="https://github.com/openyak/desktop/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/openyak/desktop/ci.yml?branch=main&style=flat-square&label=Tests %26 Type Check" alt="Tests & Type Check" /></a>
+  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/lang-中文-blue?style=flat-square" alt="中文" /></a>
+  <a href="https://github.com/openyak/desktop/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/openyak/desktop/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
   <a href="https://github.com/openyak/desktop/stargazers"><img src="https://img.shields.io/github/stars/openyak/desktop?style=flat-square" alt="GitHub Stars" /></a>
   <a href="https://github.com/openyak/desktop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/openyak/desktop?style=flat-square" alt="License" /></a>
   <a href="https://github.com/openyak/desktop/releases/latest"><img src="https://img.shields.io/github/v/release/openyak/desktop?style=flat-square" alt="Latest Release" /></a>
@@ -27,7 +22,7 @@
 
 - **Organize 500 contracts without uploading a single file.** OpenYak runs on your desktop with direct access to your filesystem — your data never leaves your machine.
 
-- **Switch from GPT-4o to DeepSeek in one click.** 100+ cloud models, 20+ API providers, or run fully offline with [Ollama](https://ollama.com). No lock-in.
+- **Switch from GPT to Claude in one click.** 100+ cloud models, 20+ API providers, or run fully offline with [Ollama](https://ollama.com). No lock-in.
 
 - **Let AI handle the tedious work.** 20+ built-in tools — read, write, rename files, run commands, parse spreadsheets, draft documents — all locally.
 
@@ -37,8 +32,7 @@
 
 | Platform | Architecture |
 |----------|-------------|
-| macOS | Apple Silicon |
-| macOS | Intel |
+| macOS | Apple Silicon / Intel |
 | Windows | x64 |
 
 > **[Download Latest Release](https://github.com/openyak/desktop/releases/latest)** or visit [open-yak.com/download](https://open-yak.com/download/)
