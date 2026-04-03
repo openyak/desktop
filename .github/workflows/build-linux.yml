@@ -71,10 +71,13 @@ jobs:
           source venv/bin/activate
           python scripts/download_node.py
 
+      - name: Sync metadata
+        run: node scripts/sync-desktop-meta.mjs
+
       - name: Build Tauri
         run: |
           cd desktop-tauri
-          npx @tauri-apps/cli build --config build.linux-x64.json
+          npx @tauri-apps/cli build --config src-tauri/build.linux-x64.json
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
