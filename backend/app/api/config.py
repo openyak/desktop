@@ -653,7 +653,7 @@ async def create_custom_endpoint(
     try:
         await registry.refresh_models()
     except Exception as e:
-        pass
+        logger.warning("Failed to refresh models after adding custom endpoint %s: %s", endpoint_id, e)
         
     return ProviderInfo(
         id=endpoint_id, name=name, is_configured=True, enabled=True,

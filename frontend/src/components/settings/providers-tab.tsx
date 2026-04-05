@@ -196,11 +196,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       setProviderKeyInputs((prev) => ({ ...prev, [id]: "" }));
       setProviderError((prev) => { const next = { ...prev }; delete next[id]; return next; });
       setProviderMutatingId(null);
-      if (id === "custom") {
-        setActiveProvider("custom");
-      } else {
-        setActiveProvider("byok");
-      }
+      setActiveProvider("byok");
       qc.invalidateQueries({ queryKey: queryKeys.providers });
       qc.invalidateQueries({ queryKey: queryKeys.models });
     },
@@ -354,11 +350,11 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       <div className="grid grid-cols-3 gap-2">
         {([
           { mode: "openyak" as ProviderMode, label: t('openyakAccount'), icon: Eye, connected: authStore.isConnected },
-          { mode: "byok" as ProviderMode, label: t('ownApiKey'), icon: Eye, connected: !!keyStatus?.is_configured || (providers ?? []).some((p) => p.is_configured && p.id !== "custom") },
+          { mode: "byok" as ProviderMode, label: t('ownApiKey'), icon: Eye, connected: !!keyStatus?.is_configured || (providers ?? []).some((p) => p.is_configured && !p.id.startsWith("custom_")) },
           { mode: "chatgpt" as ProviderMode, label: t('chatgptSubscription'), icon: CreditCard, connected: !!openaiSubStatus?.is_connected },
           { mode: "ollama" as ProviderMode, label: "Ollama", icon: Cpu, connected: ollamaConnected },
           { mode: "local" as ProviderMode, label: t('localProvider'), icon: Server, connected: !!localStatus?.is_connected },
-          { mode: "custom" as ProviderMode, label: "Custom Endpoint", icon: Server, connected: !!providers?.find(p => p.id === "custom")?.is_configured },
+          { mode: "custom" as ProviderMode, label: "Custom Endpoint", icon: Server, connected: (providers ?? []).some(p => p.id.startsWith("custom_") && p.is_configured) },
         ]).map(({ mode, label, icon: Icon, connected }) => (
           <button
             key={mode}
@@ -440,7 +436,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
           <p className="text-xs text-[var(--text-secondary)]">{t('byokDesc')}</p>
 
           {/* All BYOK providers (OpenRouter, OpenAI, Anthropic, Gemini, etc.) */}
-          {(providers ?? []).filter(p => p.id !== "custom").map((p) => (
+          {(providers ?? []).filter(p => !p.id.startsWith("custom_")).map((p) => (
             <div key={p.id} className={`rounded-lg border p-3 space-y-2 transition-opacity ${
               p.is_configured && !p.enabled ? "border-[var(--border-default)] opacity-50" : "border-[var(--border-default)]"
             }`}>
