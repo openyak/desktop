@@ -36,6 +36,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
     () => (activeProvider as ProviderMode) ?? "openyak"
   );
 
+  const [mounted, setMounted] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const qc = useQueryClient();
@@ -130,6 +131,10 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
   useEffect(() => {
     setLocalBaseUrlInput(localStatus?.base_url ?? "");
   }, [localStatus?.base_url]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fallbackToOtherProviders = () => {
     if (authStore.isConnected) {
@@ -391,8 +396,8 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
           >
             {mode === "openyak" ? <OpenYakLogo size={20} /> : <Icon className="h-5 w-5" />}
             <span className="text-xs font-medium text-center leading-tight">{label}</span>
-            {connected && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-success)]" />}
-            {activeProvider === mode && connected && (
+            {mounted && connected && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-success)]" />}
+            {activeProvider === mode && mounted && connected && (
               <span className="absolute bottom-1 text-[9px] font-medium text-[var(--brand-primary)]">{t('activeProvider')}</span>
             )}
           </button>
