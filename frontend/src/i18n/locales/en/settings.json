@@ -211,5 +211,9 @@
   "checkForUpdates": "Check for Updates",
   "upToDate": "You're up to date!",
   "updateFailed": "Update failed",
-  "updateRetry": "Retry"
+  "updateRetry": "Retry",
+  "customEndpoint": "Custom Endpoint",
+  "savedEndpoints": "Saved Endpoints",
+  "addNewCustomEndpoint": "Add New Custom Endpoint",
+  "customEndpointDesc": "Connect to OpenAI-compatible custom endpoints with full control. Add as many as you like."
 }

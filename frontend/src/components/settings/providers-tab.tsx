@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, X, Check, Loader2, AlertCircle, LogOut, CreditCard, Mail, RotateCw, Cpu, Server } from "lucide-react";
+import { Eye, EyeOff, X, Check, Loader2, AlertCircle, LogOut, CreditCard, Mail, RotateCw, Cpu, Server, Plug } from "lucide-react";
 import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -383,7 +383,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
           { mode: "chatgpt" as ProviderMode, label: t('chatgptSubscription'), icon: CreditCard, connected: !!openaiSubStatus?.is_connected },
           { mode: "ollama" as ProviderMode, label: "Ollama", icon: Cpu, connected: ollamaConnected },
           { mode: "local" as ProviderMode, label: t('localProvider'), icon: Server, connected: !!localStatus?.is_connected },
-          { mode: "custom" as ProviderMode, label: "Custom Endpoint", icon: Server, connected: (providers ?? []).some(p => p.id.startsWith("custom_") && p.is_configured) },
+          { mode: "custom" as ProviderMode, label: t('customEndpoint'), icon: Plug, connected: (providers ?? []).some(p => p.id.startsWith("custom_") && p.is_configured) },
         ]).map(({ mode, label, icon: Icon, connected }) => (
           <button
             key={mode}
@@ -649,16 +649,16 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
         const customProviders = providers?.filter(p => p.id.startsWith("custom_")) || [];
         return (
           <div className="space-y-6">
-            <p className="text-xs text-[var(--text-secondary)]">Connect to OpenAI-compatible custom endpoints with full control. Add as many as you like.</p>
+            <p className="text-xs text-[var(--text-secondary)]">{t('customEndpointDesc')}</p>
             
             {customProviders.length > 0 && (
               <div className="space-y-4">
-                <h4 className="text-xs font-semibold text-[var(--text-secondary)]">Saved Endpoints</h4>
+                <h4 className="text-xs font-semibold text-[var(--text-secondary)]">{t('savedEndpoints')}</h4>
                 {customProviders.map((p) => (
                   <div key={p.id} className={`p-3 border border-[var(--border-primary)] rounded-lg bg-[var(--surface-secondary)] ${!p.enabled ? "opacity-50" : ""}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="font-semibold">{p.name || "Custom Endpoint"}</span>
+                        <span className="font-semibold">{p.name || t('customEndpoint')}</span>
                         <span className="text-[var(--text-secondary)] font-mono ml-2 text-[10px] bg-[var(--surface-primary)] px-2 py-0.5 rounded">{p.base_url}</span>
                         {p.masked_key && <span className="text-[var(--text-tertiary)] font-mono ml-2 text-[10px]">Key: {p.masked_key}</span>}
                       </div>
@@ -694,7 +694,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
             )}
 
             <div className="space-y-4 pt-4 border-t border-[var(--border-primary)]">
-              <h4 className="text-xs font-semibold text-[var(--text-secondary)]">Add New Custom Endpoint</h4>
+              <h4 className="text-xs font-semibold text-[var(--text-secondary)]">{t('addNewCustomEndpoint')}</h4>
               <div className="space-y-3 p-3 bg-[var(--surface-secondary)] rounded-lg">
                 <Input
                   type="text"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -157,7 +158,6 @@ def get_settings() -> Settings:
     return Settings()
 
 def get_custom_endpoints(settings: Settings) -> list[dict[str, Any]]:
-    import json
     try:
         data = json.loads(settings.custom_endpoints)
         if isinstance(data, list):
