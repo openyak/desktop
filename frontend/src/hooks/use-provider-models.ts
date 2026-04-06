@@ -14,7 +14,7 @@ const PROVIDER_ID_MAP: Record<NonNullable<ActiveProvider>, string | null> = {
   chatgpt: "openai-subscription",
   ollama: "ollama",
   local: "local",
-  custom: null, // Custom endpoints: show models from custom providers
+  custom: "custom_", // Prefix match: show models from custom_* providers only
 };
 
 export function useProviderModels() {
@@ -31,6 +31,11 @@ export function useProviderModels() {
       // "byok" mode: show models from all BYOK providers
       // (everything except subscription, ollama, and openyak proxy)
       return allModels.filter((m) => !NON_BYOK_PROVIDERS.has(m.provider_id));
+    }
+
+    if (providerId.endsWith("_")) {
+      // Prefix match (e.g. "custom_" → custom_abc, custom_xyz, …)
+      return allModels.filter((m) => m.provider_id?.startsWith(providerId));
     }
 
     return allModels.filter((m) => m.provider_id === providerId);

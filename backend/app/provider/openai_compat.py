@@ -99,15 +99,18 @@ class OpenAICompatProvider(BaseProvider):
         api_key: str,
         base_url: str,
         default_headers: dict[str, str] | None = None,
+        is_custom: bool = False,
     ):
-        merged_headers = {"User-Agent": "OpenYak/1.0"}
-        if default_headers:
-            merged_headers.update(default_headers)
+        headers = dict(default_headers or {})
+        if is_custom:
+            headers.setdefault("User-Agent", "OpenYak/1.0")
+
+        effective_key = api_key if api_key else ("sk-no-key" if is_custom else api_key)
 
         self._client = AsyncOpenAI(
-            api_key=api_key or "sk-no-key",
+            api_key=effective_key,
             base_url=base_url,
-            default_headers=merged_headers,
+            default_headers=headers,
             timeout=httpx.Timeout(300.0, connect=30.0),  # 5min read (free models cold-start), 30s connect
         )
 

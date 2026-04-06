@@ -41,6 +41,7 @@ class GenericOpenAIProvider(OpenAICompatProvider):
             api_key=api_key,
             base_url=base_url,
             default_headers=default_headers,
+            is_custom=(kind == "openai_compat_custom"),
         )
         self._api_key = api_key
         self._provider_id = provider_id
