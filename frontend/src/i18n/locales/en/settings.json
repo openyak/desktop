@@ -215,5 +215,8 @@
   "customEndpoint": "Custom Endpoint",
   "savedEndpoints": "Saved Endpoints",
   "addNewCustomEndpoint": "Add New Custom Endpoint",
-  "customEndpointDesc": "Connect to OpenAI-compatible custom endpoints with full control. Add as many as you like."
+  "customEndpointDesc": "Connect to OpenAI-compatible custom endpoints with full control. Add as many as you like.",
+  "endpointNamePlaceholder": "Endpoint Name (e.g. My Local Model)",
+  "apiKeyPlaceholderOptional": "API Key (Leave blank if not required)",
+  "addEndpoint": "Add Endpoint"
 }

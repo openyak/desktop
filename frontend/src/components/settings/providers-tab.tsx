@@ -700,7 +700,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
                   type="text"
                   value={customEndpointName}
                   onChange={(e) => setCustomEndpointName(e.target.value)}
-                  placeholder="Endpoint Name (e.g. My Local Model)"
+                  placeholder={t('endpointNamePlaceholder')}
                   className="text-xs bg-[var(--surface-primary)]"
                 />
                 <Input
@@ -715,7 +715,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
                     type={showProviderKey["custom_new"] ? "text" : "password"}
                     value={providerKeyInputs["custom_new"] ?? ""}
                     onChange={(e) => setProviderKeyInputs((prev) => ({ ...prev, ["custom_new"]: e.target.value }))}
-                    placeholder="API Key (Leave blank if not required)"
+                    placeholder={t('apiKeyPlaceholderOptional')}
                     className="pr-8 font-mono text-xs bg-[var(--surface-primary)]"
                     autoComplete="one-time-code"
                   />
@@ -746,7 +746,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
                     disabled={!(providerBaseUrlInputs["custom_new"] ?? "").trim() || providerMutatingId === "custom_new"}
                   >
                     {providerMutatingId === "custom_new" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                    Add Endpoint
+                    {t('addEndpoint')}
                   </Button>
                 </div>
               </div>

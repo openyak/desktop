@@ -61,7 +61,7 @@ def _build_custom_endpoint_info(
     *,
     enabled: bool,
     status: str,
-    model_count: int | None = None,
+    model_count: int = 0,
 ) -> ProviderInfo:
     """Build ProviderInfo for a custom endpoint."""
     return ProviderInfo(
@@ -714,10 +714,8 @@ async def update_custom_endpoint(
 ) -> ProviderInfo:
     """Update a custom endpoint (partial update)."""
     models = []
-    name = ""
-    base_url = ""
-    api_key = ""
-    enabled = True
+    test_provider = None
+    needs_rebuild = body.base_url is not None or body.api_key is not None
 
     async with _custom_endpoints_lock:
         endpoints = get_custom_endpoints(settings)
@@ -738,7 +736,7 @@ async def update_custom_endpoint(
         api_key = body.api_key.strip() if body.api_key is not None else found.get("api_key", "")
         enabled = body.enabled if body.enabled is not None else found.get("enabled", True)
 
-        if body.base_url is not None or body.api_key is not None:
+        if needs_rebuild:
             try:
                 test_provider = create_desktop_provider(endpoint_id, api_key, base_url=base_url)
                 models = await test_provider.list_models()
@@ -761,15 +759,14 @@ async def update_custom_endpoint(
         settings.custom_endpoints = json.dumps(endpoints)
         _update_env_file("OPENYAK_CUSTOM_ENDPOINTS", settings.custom_endpoints)
 
-    if enabled:
+    if enabled and needs_rebuild and test_provider is not None:
         registry.unregister(endpoint_id)
-        test_provider = create_desktop_provider(endpoint_id, api_key, base_url=base_url)
         registry.register(test_provider)
         try:
             await registry.refresh_models()
         except Exception as e:
             logger.warning("Failed to refresh models after updating custom endpoint %s: %s", endpoint_id, e)
-    else:
+    elif not enabled:
         registry.unregister(endpoint_id)
 
     return ProviderInfo(

@@ -215,5 +215,8 @@
   "customEndpoint": "自定义端点",
   "savedEndpoints": "已保存的端点",
   "addNewCustomEndpoint": "添加新端点",
-  "customEndpointDesc": "连接到 OpenAI 兼容的自定义端点，完全控制。可添加任意数量。"
+  "customEndpointDesc": "连接到 OpenAI 兼容的自定义端点，完全控制。可添加任意数量。",
+  "endpointNamePlaceholder": "端点名称（例如：我的本地模型）",
+  "apiKeyPlaceholderOptional": "API 密钥（如不需要可留空）",
+  "addEndpoint": "添加端点"
 }
