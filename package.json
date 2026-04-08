@@ -2,6 +2,7 @@
   "name": "openyak",
   "version": "1.0.5",
   "private": true,
+  "license": "MIT",
   "description": "OpenYak — Your local AI assistant",
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
