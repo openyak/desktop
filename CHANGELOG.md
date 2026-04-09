@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), and this project
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-04-09
+
+### Added
+
+- **backend:** ToolSearch meta-tool — agents can now discover and load deferred MCP tool schemas on demand via keyword or exact-name search, enabling dynamic tool expansion without bloating initial context
+- **frontend:** Three-dot dropdown menu on session sidebar items — quick access to rename, pin/unpin, export (PDF/Markdown), and delete without right-clicking
+- **frontend:** `extractApiDetail` helper for provider error display — properly surfaces FastAPI 422 validation errors instead of generic fallback messages
+
+### Fixed
+
+- **backend:** Env file value quoting — values containing `#` (e.g., JSON with URL fragments) are now single-quoted to prevent dotenv comment truncation
+- **frontend:** Chat header z-index — added `relative z-10` to prevent content overlapping the header during scroll
+
+### Changed
+
+- **backend:** Simplified agent build prompt — removed verbose inline tool listings and redundant "when to use todo" instructions; added rule for auto-analyzing attached data files
+- **backend:** Refactored session prompt building, system prompt construction, and connector/tool registry initialization for cleaner separation of concerns
+- **desktop:** Updated all Tauri app icons across Windows, macOS, iOS, and Android targets
+- **scripts:** Dev script now uses `python` instead of `./venv/bin/python` for cross-platform compatibility
+- **license:** Changed from AGPLv3 to MIT
+
 ## [1.0.5] - 2026-04-06
 
 ### Added
