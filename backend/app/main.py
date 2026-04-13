@@ -382,11 +382,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await task_scheduler.start()
     app.state.task_scheduler = task_scheduler
 
-    # OpenClaw runtime manager (always created — manages binary + process)
-    from app.openclaw.manager import OpenClawManager
+    # Nanobot-based channel system (in-process, no external dependencies)
+    from app.channels.bus.queue import MessageBus
+    from app.channels.config import load_channels_config
+    from app.channels.manager import ChannelManager
+    from app.channels.adapter import AgentAdapter
 
-    openclaw_manager = OpenClawManager(data_dir=data_dir)
-    app.state.openclaw_manager = openclaw_manager
+    message_bus = MessageBus()
+    channels_config = load_channels_config(data_dir / "channels.json")
+    channel_manager = ChannelManager(channels_config, message_bus)
+    channel_manager.init_channels()
+
+    agent_adapter = AgentAdapter(message_bus, app.state)
+    await agent_adapter.start()
+    await channel_manager.start_all()
+
+    app.state.message_bus = message_bus
+    app.state.channel_manager = channel_manager
+    app.state.agent_adapter = agent_adapter
 
     # Workspace memory queue (async, debounced refresh)
     from app.memory.workspace_memory_queue import (
@@ -427,10 +440,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     logger.warning("Shutdown: force-cancelled %d lingering task(s)", len(pending))
                     await asyncio.gather(*pending, return_exceptions=True)
 
-    # Stop OpenClaw runtime
-    openclaw_mgr = getattr(app.state, "openclaw_manager", None)
-    if openclaw_mgr and openclaw_mgr.is_running:
-        await openclaw_mgr.stop()
+    # Stop channel system
+    agent_adapter = getattr(app.state, "agent_adapter", None)
+    if agent_adapter:
+        await agent_adapter.stop()
+    channel_mgr = getattr(app.state, "channel_manager", None)
+    if channel_mgr:
+        await channel_mgr.stop_all()
 
     # Stop remote tunnel
     tunnel_mgr = getattr(app.state, "tunnel_manager", None)

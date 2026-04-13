@@ -1,4 +1,4 @@
-"""OpenAI-compatible API endpoints for external integrations (e.g. OpenClaw).
+"""OpenAI-compatible API endpoints for external integrations.
 
 Exposes /v1/chat/completions and /v1/models so OpenYak can be used as a
 drop-in OpenAI-compatible backend. Internally delegates to the same
@@ -94,7 +94,7 @@ def _resolve_agent(model: str) -> str:
 
 
 def _resolve_default_model(registry: ProviderRegistryDep) -> str | None:
-    """Pick the best model for external API calls (e.g. from OpenClaw).
+    """Pick the best model for external API calls.
 
     Priority: subscription > Anthropic > paid OpenRouter > free.
     """

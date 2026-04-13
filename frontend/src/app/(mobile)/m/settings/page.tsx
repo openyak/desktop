@@ -23,7 +23,7 @@ import { api } from "@/lib/api";
 import { API } from "@/lib/constants";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { ModelInfo } from "@/types/model";
-import { useChannels, useOpenClawStatus } from "@/hooks/use-channels";
+import { useChannels, useChannelStatus } from "@/hooks/use-channels";
 
 export default function MobileSettingsPage() {
   const router = useRouter();
@@ -384,10 +384,10 @@ export default function MobileSettingsPage() {
 
 /** Compact channels status card for mobile settings. */
 function ChannelsStatusCard() {
-  const { data: clawStatus } = useOpenClawStatus();
+  const { data: channelStatus } = useChannelStatus();
   const { data: channels } = useChannels();
 
-  const running = clawStatus?.running ?? false;
+  const running = channelStatus?.running ?? false;
   const channelEntries = Object.entries(channels?.channels ?? {});
 
   if (!running && channelEntries.length === 0) return null;

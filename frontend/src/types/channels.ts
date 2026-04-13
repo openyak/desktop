@@ -1,9 +1,9 @@
-/** Channel (messaging platform connection via OpenClaw) types */
+/** Channel (messaging platform) types */
 
 export interface ChannelInfo {
   id: string;
   name: string;
-  status: string;
+  status: string;  // "running" | "configured" | "disabled"
   type: string;
   account?: string;
 }
@@ -14,11 +14,10 @@ export interface ChannelsResponse {
   error?: string;
 }
 
-export interface OpenClawStatus {
-  installed: boolean;
+/** Status of the in-process channel system */
+export interface ChannelSystemStatus {
   running: boolean;
-  port: number | null;
-  ws_url: string | null;
+  channels: Record<string, { enabled: boolean; running: boolean }>;
 }
 
 export interface PlatformDef {

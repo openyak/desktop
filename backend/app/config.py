@@ -140,10 +140,9 @@ class Settings(BaseSettings):
     rate_limit_max_requests: int = 120  # max requests per minute
     rate_limit_max_failed_auth: int = 5  # max failed auth attempts per minute
 
-    # --- OpenClaw Bridge (Messaging Channels) ---
-    openclaw_enabled: bool = False  # OPENYAK_OPENCLAW_ENABLED
-    openclaw_url: str = "ws://127.0.0.1:18789"  # OPENYAK_OPENCLAW_URL
-    openclaw_token: str = ""  # OPENYAK_OPENCLAW_TOKEN
+    # --- Messaging Channels (nanobot-based, in-process) ---
+    channels_enabled: bool = True  # OPENYAK_CHANNELS_ENABLED
+    channels_config_path: str = ""  # OPENYAK_CHANNELS_CONFIG_PATH (default: data/channels.json)
 
     # --- Remote Access ---
     remote_access_enabled: bool = False

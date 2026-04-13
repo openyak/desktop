@@ -229,14 +229,10 @@ export const API = {
   },
   CHANNELS: {
     LIST: "/api/channels",
+    STATUS: "/api/channels/status",
     ADD: "/api/channels/add",
     LOGIN: "/api/channels/login",
     REMOVE: "/api/channels/remove",
-    OPENCLAW_STATUS: "/api/channels/openclaw/status",
-    OPENCLAW_SETUP: "/api/channels/openclaw/setup",
-    OPENCLAW_START: "/api/channels/openclaw/start",
-    OPENCLAW_STOP: "/api/channels/openclaw/stop",
-    OPENCLAW_UNINSTALL: "/api/channels/openclaw/uninstall",
   },
   WORKSPACE_MEMORY: {
     BASE: "/api/workspace-memory",
@@ -281,7 +277,7 @@ export const queryKeys = {
   ollamaStatus: ["ollamaStatus"] as const,
   connectors: ["connectors"] as const,
   channels: ["channels"] as const,
-  openclawStatus: ["openclawStatus"] as const,
+  channelStatus: ["channelStatus"] as const,
   plugins: {
     all: ["plugins"] as const,
     detail: (name: string) => ["plugins", name] as const,

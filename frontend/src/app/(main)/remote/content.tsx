@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2, AlertTriangle, Download, Play, Square, RotateCw, Eye, EyeOff, ExternalLink, X, Unplug } from "lucide-react";
+import { ArrowLeft, Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink, X, Unplug } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,15 @@ import { api } from "@/lib/api";
 import { API, IS_DESKTOP, getBackendUrl } from "@/lib/constants";
 import {
   useChannels,
-  useOpenClawStatus,
-  useOpenClawStart,
-  useOpenClawStop,
   useAddChannel,
   useRemoveChannel,
 } from "@/hooks/use-channels";
-import { WhatsAppIcon, DiscordIcon, TelegramIcon, SlackIcon, FeishuIcon, SignalIcon, LineIcon, IMessageIcon } from "@/components/icons/platform-icons";
-import type { ChannelInfo, PlatformDef } from "@/types/channels";
+import {
+  WhatsAppIcon, DiscordIcon, TelegramIcon, SlackIcon, FeishuIcon,
+  WeChatIcon, DingTalkIcon, EmailIcon, QQIcon, MatrixIcon,
+  WeComIcon, WebSocketIcon, MoChatIcon,
+} from "@/components/icons/platform-icons";
+import type { PlatformDef } from "@/types/channels";
 
 /* ------------------------------------------------------------------ */
 /* Tab content (embedded in Settings)                                  */
@@ -244,8 +245,8 @@ export function RemoteTabContent() {
       {/* Divider */}
       <div className="border-t border-[var(--border-default)]" />
 
-      {/* OpenClaw Channels */}
-      <OpenClawSection />
+      {/* Messaging Channels */}
+      <ChannelsSection />
     </div>
   );
 }
@@ -253,26 +254,33 @@ export function RemoteTabContent() {
 
 
 /* ------------------------------------------------------------------ */
-/* OpenClaw Channels Section                                           */
+/* Messaging Channels Section (nanobot-based, in-process)              */
 /* ------------------------------------------------------------------ */
 
 const PLATFORMS: PlatformDef[] = [
+  // --- Major platforms ---
   { id: "whatsapp", name: "WhatsApp", icon: <WhatsAppIcon size={18} />, color: "text-[#25D366]", auth: "qr",
     help: "Scan QR code with your phone to link WhatsApp" },
-  { id: "discord", name: "Discord", icon: <DiscordIcon size={18} />, color: "text-[#5865F2]", auth: "token",
-    help: "Create a bot at Discord Developer Portal",
-    helpUrl: "https://discord.com/developers/applications",
-    fields: [{ key: "token", label: "Bot Token", placeholder: "Paste Discord bot token", secret: true }] },
   { id: "telegram", name: "Telegram", icon: <TelegramIcon size={18} />, color: "text-[#26A5E4]", auth: "token",
     help: "Get a token from @BotFather on Telegram",
     helpUrl: "https://t.me/BotFather",
     fields: [{ key: "token", label: "Bot Token", placeholder: "123456:ABC-DEF...", secret: true }] },
+  { id: "discord", name: "Discord", icon: <DiscordIcon size={18} />, color: "text-[#5865F2]", auth: "token",
+    help: "Create a bot at Discord Developer Portal",
+    helpUrl: "https://discord.com/developers/applications",
+    fields: [{ key: "token", label: "Bot Token", placeholder: "Paste Discord bot token", secret: true }] },
   { id: "slack", name: "Slack", icon: <SlackIcon size={18} />, color: "text-[#E01E5A]", auth: "token",
     help: "Create an app at api.slack.com/apps",
     helpUrl: "https://api.slack.com/apps",
     fields: [
       { key: "bot_token", label: "Bot Token", placeholder: "xoxb-...", secret: true },
       { key: "app_token", label: "App Token", placeholder: "xapp-...", secret: true },
+    ] },
+  // --- China platforms ---
+  { id: "weixin", name: "WeChat", icon: <WeChatIcon size={18} />, color: "text-[#07C160]", auth: "token",
+    help: "Requires WeChat HTTP API (e.g. ilinkai)",
+    fields: [
+      { key: "api_url", label: "API URL", placeholder: "http://localhost:9503", secret: false },
     ] },
   { id: "feishu", name: "Feishu", icon: <FeishuIcon size={18} />, color: "text-[#3370FF]", auth: "token",
     help: "Create an app at Feishu Open Platform",
@@ -281,34 +289,51 @@ const PLATFORMS: PlatformDef[] = [
       { key: "app_id", label: "App ID", placeholder: "cli_xxxxx", secret: false },
       { key: "app_secret", label: "App Secret", placeholder: "Enter app secret", secret: true },
     ] },
-  { id: "signal", name: "Signal", icon: <SignalIcon size={18} />, color: "text-[#3A76F0]", auth: "token",
-    help: "Requires signal-cli installed",
+  { id: "dingtalk", name: "DingTalk", icon: <DingTalkIcon size={18} />, color: "text-[#0089FF]", auth: "token",
+    help: "Create a bot at DingTalk Open Platform",
+    helpUrl: "https://open.dingtalk.com",
     fields: [
-      { key: "signal_number", label: "Phone Number", placeholder: "+1234567890", secret: false },
+      { key: "token", label: "App Key", placeholder: "Enter DingTalk app key", secret: true },
     ] },
-  { id: "line", name: "LINE", icon: <LineIcon size={18} />, color: "text-[#06C755]", auth: "token",
-    help: "Get credentials from LINE Developers Console",
-    helpUrl: "https://developers.line.biz/console/",
+  { id: "wecom", name: "WeCom", icon: <WeComIcon size={18} />, color: "text-[#0082EF]", auth: "token",
+    help: "Create a bot at WeCom Admin Console",
     fields: [
-      { key: "token", label: "Channel Access Token", placeholder: "Paste LINE channel access token", secret: true },
+      { key: "token", label: "Corp ID / Secret", placeholder: "Enter WeCom credentials", secret: true },
     ] },
-  { id: "imessage", name: "iMessage", icon: <IMessageIcon size={18} />, color: "text-[#34C759]", auth: "token",
-    help: "macOS only \u2014 reads your local iMessage database",
+  { id: "qq", name: "QQ", icon: <QQIcon size={18} />, color: "text-[#12B7F5]", auth: "token",
+    help: "Create a bot at QQ Open Platform",
+    helpUrl: "https://q.qq.com",
     fields: [
-      { key: "db_path", label: "Database Path (optional)", placeholder: "~/Library/Messages/chat.db", secret: false },
+      { key: "token", label: "App ID / Secret", placeholder: "Enter QQ bot credentials", secret: true },
+    ] },
+  // --- Other platforms ---
+  { id: "email", name: "Email", icon: <EmailIcon size={18} />, color: "text-[#EA4335]", auth: "token",
+    help: "Connect via IMAP/SMTP",
+    fields: [
+      { key: "token", label: "IMAP/SMTP Config", placeholder: "See docs for config format", secret: false },
+    ] },
+  { id: "matrix", name: "Matrix", icon: <MatrixIcon size={18} />, color: "text-[#0DBD8B]", auth: "token",
+    help: "Connect to a Matrix homeserver",
+    fields: [
+      { key: "token", label: "Access Token", placeholder: "Enter Matrix access token", secret: true },
+    ] },
+  { id: "mochat", name: "MoChat", icon: <MoChatIcon size={18} />, color: "text-[#6366F1]", auth: "token",
+    help: "Connect to MoChat server",
+    fields: [
+      { key: "token", label: "API Token", placeholder: "Enter MoChat API token", secret: true },
+    ] },
+  { id: "websocket", name: "WebSocket", icon: <WebSocketIcon size={18} />, color: "text-[#64748B]", auth: "token",
+    help: "Generic WebSocket channel for custom integrations",
+    fields: [
+      { key: "token", label: "WebSocket URL", placeholder: "ws://localhost:8765", secret: false },
     ] },
 ];
 
-function OpenClawSection() {
+function ChannelsSection() {
   const { t } = useTranslation("settings");
-  const { data: clawStatus, refetch: refetchClaw } = useOpenClawStatus();
   const { data: channelsData, refetch: refetchChannels } = useChannels();
-  const startClaw = useOpenClawStart();
-  const stopClaw = useOpenClawStop();
   const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
 
-  const installed = clawStatus?.installed ?? false;
-  const running = clawStatus?.running ?? false;
   const channels = channelsData?.channels ?? {};
 
   return (
@@ -318,31 +343,14 @@ function OpenClawSection() {
         {t("channelsDesc")}
       </p>
 
-      {/* OpenClaw runtime card */}
+      {/* Status indicator */}
       <div className="rounded-lg border border-[var(--border-default)] p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${running ? "bg-emerald-500" : installed ? "bg-amber-400" : "bg-[var(--text-tertiary)]"}`} />
-            <span className="text-xs font-medium text-[var(--text-primary)]">{t("openclawGateway")}</span>
-            <span className="text-[10px] text-[var(--text-tertiary)]">
-              {running ? t("gatewayRunning") : installed ? t("gatewayStopped") : t("gatewayNotInstalled")}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {!installed && <OpenClawSetupButton onComplete={() => refetchClaw()} />}
-            {installed && !running && (
-              <Button variant="outline" size="sm" className="h-7 text-[11px]"
-                onClick={() => startClaw.mutate()} disabled={startClaw.isPending}>
-                {startClaw.isPending ? <><Loader2 className="h-3 w-3 animate-spin" />{t("gatewayStarting")}</> : <><Play className="h-3 w-3" />{t("gatewayStart")}</>}
-              </Button>
-            )}
-            {running && (
-              <Button variant="outline" size="sm" className="h-7 text-[11px]"
-                onClick={() => stopClaw.mutate()} disabled={stopClaw.isPending}>
-                {stopClaw.isPending ? <><Loader2 className="h-3 w-3 animate-spin" />{t("gatewayStopping")}</> : <><Square className="h-3 w-3" />{t("gatewayStop")}</>}
-              </Button>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="text-xs font-medium text-[var(--text-primary)]">Channel System</span>
+          <span className="text-[10px] text-[var(--text-tertiary)]">
+            Built-in &middot; {Object.keys(channels).length} active
+          </span>
         </div>
       </div>
 
@@ -363,7 +371,6 @@ function OpenClawSection() {
                 </div>
                 {!connected ? (
                   <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
-                    disabled={!running && !isExpanded}
                     onClick={() => setExpandedPlatform(isExpanded ? null : p.id)}>
                     {isExpanded ? t("channelCancel") : t("channelConnect")}
                   </Button>
@@ -372,14 +379,12 @@ function OpenClawSection() {
                 )}
               </div>
 
-              {/* Expanded: setup form (stays visible during login even if gateway restarts) */}
+              {/* Expanded: setup form */}
               {isExpanded && (
                 <div className="pt-1">
                   {p.auth === "qr" ? (
                     <QrLoginFlow channel={p.id} onDone={() => {
                       setExpandedPlatform(null);
-                      // Auto-start gateway if it was stopped during login
-                      if (!running) startClaw.mutate();
                       setTimeout(() => refetchChannels(), 2000);
                     }} />
                   ) : (
@@ -391,12 +396,6 @@ function OpenClawSection() {
           );
         })}
       </div>
-
-      {!running && installed && (
-        <p className="text-center text-[11px] text-[var(--text-tertiary)]">
-          {t("gatewayHint")}
-        </p>
-      )}
     </div>
   );
 }
@@ -597,67 +596,3 @@ function RemoveChannelButton({ channel, onRemoved }: { channel: string; onRemove
   );
 }
 
-/** SSE-streaming setup button (install + start OpenClaw). */
-function OpenClawSetupButton({ onComplete }: { onComplete: () => void }) {
-  const { t } = useTranslation("settings");
-  const [progress, setProgress] = useState<{ status: string; message?: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const startSetup = useCallback(async () => {
-    setError(null);
-    setProgress({ status: "starting" });
-    try {
-      const backendUrl = await getBackendUrl();
-      const resp = await fetch(`${backendUrl}${API.CHANNELS.OPENCLAW_SETUP}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-      });
-      if (!resp.ok || !resp.body) { setError(t("setupFailed")); setProgress(null); return; }
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            setProgress(data);
-            if (data.status === "error") { setError(data.message || t("setupFailed")); setProgress(null); return; }
-            if (data.status === "ready") { setProgress(null); onComplete(); return; }
-          } catch { /* ignore */ }
-        }
-      }
-      setProgress(null);
-      onComplete();
-    } catch (e) { setError(String(e)); setProgress(null); }
-  }, [onComplete]);
-
-  if (error) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-red-400 max-w-[200px] truncate">{error}</span>
-        <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={startSetup}>
-          <RotateCw className="h-3 w-3" />{t("setupRetry")}
-        </Button>
-      </div>
-    );
-  }
-  if (progress) {
-    return (
-      <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        <span className="max-w-[200px] truncate">{progress.message || progress.status}</span>
-      </div>
-    );
-  }
-  return (
-    <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={startSetup}>
-      <Download className="h-3 w-3" />{t("setupSetUp")}
-    </Button>
-  );
-}

@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
-import type { ChannelsResponse, OpenClawStatus } from "@/types/channels";
+import type { ChannelsResponse, ChannelSystemStatus } from "@/types/channels";
 
 export function useChannels() {
   return useQuery({
@@ -14,33 +14,11 @@ export function useChannels() {
   });
 }
 
-export function useOpenClawStatus() {
+export function useChannelStatus() {
   return useQuery({
-    queryKey: queryKeys.openclawStatus,
-    queryFn: () => api.get<OpenClawStatus>(API.CHANNELS.OPENCLAW_STATUS),
+    queryKey: queryKeys.channelStatus,
+    queryFn: () => api.get<ChannelSystemStatus>(API.CHANNELS.STATUS),
     refetchInterval: 10_000,
-  });
-}
-
-export function useOpenClawStart() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<{ status: string }>(API.CHANNELS.OPENCLAW_START),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.openclawStatus });
-      qc.invalidateQueries({ queryKey: queryKeys.channels });
-    },
-  });
-}
-
-export function useOpenClawStop() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<{ status: string }>(API.CHANNELS.OPENCLAW_STOP),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.openclawStatus });
-      qc.invalidateQueries({ queryKey: queryKeys.channels });
-    },
   });
 }
 
@@ -51,6 +29,7 @@ export function useAddChannel() {
       api.post<{ ok: boolean; message: string }>(API.CHANNELS.ADD, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.channels });
+      qc.invalidateQueries({ queryKey: queryKeys.channelStatus });
     },
   });
 }
@@ -62,6 +41,7 @@ export function useRemoveChannel() {
       api.post<{ ok: boolean; message: string }>(API.CHANNELS.REMOVE, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.channels });
+      qc.invalidateQueries({ queryKey: queryKeys.channelStatus });
     },
   });
 }

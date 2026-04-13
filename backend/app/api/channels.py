@@ -1,15 +1,23 @@
-"""Channels API — manage OpenClaw runtime and messaging platform channels."""
+"""Channels API — manage in-process messaging platform channels.
+
+Replaces the old OpenClaw-based system with nanobot's native channel
+architecture running directly inside OpenYak (no external Node.js process).
+"""
 
 from __future__ import annotations
 
-import base64
-import io
+import asyncio
 import json
 import logging
+import os
 import re
+import shutil
+import subprocess
+import threading
+import queue as _queue
+from pathlib import Path
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -23,458 +31,472 @@ router = APIRouter()
 # Schemas
 # ---------------------------------------------------------------------------
 
-class OpenClawStatusResponse(BaseModel):
-    installed: bool
+class ChannelSystemStatus(BaseModel):
+    """Status of the in-process channel system."""
     running: bool
-    port: int | None = None
-    ws_url: str | None = None
+    channels: dict[str, Any]
 
 
 class ChannelAddRequest(BaseModel):
-    channel: str  # whatsapp, discord, telegram, slack, feishu, signal
-    account: str = "default"
+    channel: str  # telegram, discord, slack, whatsapp, feishu, weixin, wecom, dingtalk, qq, email, matrix, mochat, websocket
+    # Common fields
+    allow_from: list[str] | None = None  # ["*"] for allow all
     # Token-based fields (varies by channel)
     token: str | None = None       # discord, telegram
     bot_token: str | None = None   # slack (xoxb-...)
     app_token: str | None = None   # slack (xapp-...)
     app_id: str | None = None      # feishu
     app_secret: str | None = None  # feishu
-    signal_number: str | None = None  # signal
-    db_path: str | None = None     # imessage
-
-
-class ChannelLoginRequest(BaseModel):
-    channel: str = "whatsapp"
-    account: str = "default"
+    # WeChat fields
+    api_url: str | None = None     # weixin HTTP API URL
+    # WhatsApp fields
+    bridge_url: str | None = None  # whatsapp bridge WebSocket URL
+    # General
+    streaming: bool = False
+    extra: dict[str, Any] | None = None  # Pass-through for any channel-specific config
 
 
 class ChannelRemoveRequest(BaseModel):
     channel: str
-    account: str = "default"
+
+
+class ChannelLoginRequest(BaseModel):
+    channel: str = "whatsapp"
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_openclaw_manager(request: Request):
-    return getattr(request.app.state, "openclaw_manager", None)
+def _get_channel_manager(request: Request):
+    """Get the ChannelManager from app state."""
+    return getattr(request.app.state, "channel_manager", None)
 
 
-def _require_manager(request: Request):
-    mgr = _get_openclaw_manager(request)
-    if mgr is None:
-        raise HTTPException(503, "OpenClaw manager not initialized")
-    if not mgr.is_installed:
-        raise HTTPException(400, "OpenClaw not installed — run setup first")
-    return mgr
+def _get_channels_config_path() -> Path:
+    return Path("data/channels.json")
+
+
+def _load_config_dict() -> dict:
+    """Load raw channels.json config."""
+    path = _get_channels_config_path()
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"channels": {}}
+
+
+def _save_config_dict(data: dict) -> None:
+    """Save raw channels.json config."""
+    path = _get_channels_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
-# OpenClaw Runtime (install / start / stop)
+# Channel System Status
 # ---------------------------------------------------------------------------
 
-@router.get("/channels/openclaw/status", response_model=OpenClawStatusResponse)
-async def openclaw_status(request: Request) -> OpenClawStatusResponse:
-    mgr = _get_openclaw_manager(request)
+@router.get("/channels/status")
+async def channels_status(request: Request) -> ChannelSystemStatus:
+    """Get status of the in-process channel system."""
+    mgr = _get_channel_manager(request)
     if mgr is None:
-        return OpenClawStatusResponse(installed=False, running=False)
-    status = await mgr.status()
-    return OpenClawStatusResponse(
-        installed=status["installed"],
-        running=status["running"],
-        port=status["port"],
-        ws_url=status.get("ws_url"),
+        return ChannelSystemStatus(running=False, channels={})
+
+    return ChannelSystemStatus(
+        running=bool(mgr.enabled_channels),
+        channels=mgr.get_status(),
     )
 
 
+# Backward-compat: old frontend polls /channels/openclaw/status
+@router.get("/channels/openclaw/status")
+async def openclaw_status_compat(request: Request) -> dict:
+    """Backward-compatible status endpoint.
+
+    Reports the new channel system as 'installed' and 'running'
+    so the old frontend can work during the transition.
+    """
+    mgr = _get_channel_manager(request)
+    running = mgr is not None and bool(mgr.enabled_channels)
+    return {
+        "installed": True,
+        "running": running,
+        "port": None,
+        "ws_url": None,
+    }
+
+
+# Backward-compat stubs so old frontend doesn't error
 @router.post("/channels/openclaw/setup")
-async def openclaw_setup(request: Request):
-    mgr = _get_openclaw_manager(request)
-    if mgr is None:
-        raise HTTPException(503, "OpenClaw manager not initialized")
-
-    async def stream():
-        if not mgr.is_installed:
-            async for progress in mgr.install():
-                yield f"data: {json.dumps(progress)}\n\n"
-                if progress.get("status") == "error":
-                    return
-        else:
-            yield f"data: {json.dumps({'status': 'already_installed'})}\n\n"
-
-        yield f"data: {json.dumps({'status': 'starting', 'message': 'Starting OpenClaw gateway...'})}\n\n"
-        try:
-            openyak_port = request.url.port or 8000
-            ws_url = await mgr.start(openyak_port=openyak_port)
-            yield f"data: {json.dumps({'status': 'ready', 'ws_url': ws_url})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
-
-    return StreamingResponse(stream(), media_type="text/event-stream")
+async def openclaw_setup_compat(request: Request) -> dict:
+    return {"status": "ready", "message": "Channel system is built-in (no setup needed)"}
 
 
 @router.post("/channels/openclaw/start")
-async def openclaw_start(request: Request) -> dict:
-    mgr = _get_openclaw_manager(request)
-    if mgr is None:
-        raise HTTPException(503, "OpenClaw manager not initialized")
-    if not mgr.is_installed:
-        raise HTTPException(400, "OpenClaw not installed — run setup first")
-    try:
-        openyak_port = request.url.port or 8000
-        ws_url = await mgr.start(openyak_port=openyak_port)
-        return {"status": "running", "ws_url": ws_url}
-    except Exception as e:
-        raise HTTPException(500, f"Failed to start OpenClaw: {e}")
+async def openclaw_start_compat(request: Request) -> dict:
+    return {"status": "running", "message": "Channel system is always running"}
 
 
 @router.post("/channels/openclaw/stop")
-async def openclaw_stop(request: Request) -> dict:
-    mgr = _get_openclaw_manager(request)
-    if mgr is None:
-        raise HTTPException(503, "OpenClaw manager not initialized")
-    await mgr.stop()
+async def openclaw_stop_compat(request: Request) -> dict:
     return {"status": "stopped"}
 
 
 @router.delete("/channels/openclaw/uninstall")
-async def openclaw_uninstall(request: Request) -> dict:
-    mgr = _get_openclaw_manager(request)
-    if mgr is None:
-        raise HTTPException(503, "OpenClaw manager not initialized")
-    result = await mgr.uninstall()
-    return {"status": "uninstalled", **result}
+async def openclaw_uninstall_compat(request: Request) -> dict:
+    return {"status": "not_applicable", "message": "Channel system is built-in"}
 
 
 # ---------------------------------------------------------------------------
-# Channel Management (add / login / remove)
-# ---------------------------------------------------------------------------
-
-@router.post("/channels/add")
-async def add_channel(request: Request, body: ChannelAddRequest) -> dict:
-    """Add a channel account (token-based: Discord, Telegram, Slack, Feishu)."""
-    mgr = _require_manager(request)
-
-    args = ["channels", "add", "--channel", body.channel, "--account", body.account]
-
-    # Build channel-specific args
-    if body.channel == "discord":
-        if not body.token:
-            raise HTTPException(400, "Discord requires a bot token")
-        args += ["--token", body.token]
-
-    elif body.channel == "telegram":
-        if not body.token:
-            raise HTTPException(400, "Telegram requires a bot token")
-        args += ["--token", body.token]
-
-    elif body.channel == "slack":
-        if not body.bot_token or not body.app_token:
-            raise HTTPException(400, "Slack requires both bot token and app token")
-        args += ["--bot-token", body.bot_token, "--app-token", body.app_token]
-
-    elif body.channel == "feishu":
-        if not body.app_id or not body.app_secret:
-            raise HTTPException(400, "Feishu requires app ID and app secret")
-        # Feishu uses env vars — pass via environment
-        result = await mgr.run_cli(args)
-        # TODO: handle feishu env var injection
-        return {"ok": result["ok"], "message": result.get("stderr") or result.get("stdout", "")}
-
-    elif body.channel == "signal":
-        if not body.signal_number:
-            raise HTTPException(400, "Signal requires a phone number")
-        args += ["--signal-number", body.signal_number]
-
-    elif body.channel == "line":
-        if not body.token:
-            raise HTTPException(400, "LINE requires a channel access token")
-        args += ["--token", body.token]
-
-    elif body.channel == "imessage":
-        if body.db_path:
-            args += ["--db-path", body.db_path]
-
-    else:
-        raise HTTPException(400, f"Unsupported channel: {body.channel}")
-
-    result = await mgr.run_cli(args)
-    if result["ok"]:
-        _set_channel_defaults(body.channel)
-        return {"ok": True, "message": f"{body.channel} channel added successfully"}
-    else:
-        msg = result["stderr"].strip() or result["stdout"].strip() or "Unknown error"
-        # Strip ANSI escape codes
-        msg = re.sub(r"\x1b\[[0-9;]*m", "", msg)
-        return {"ok": False, "message": msg}
-
-
-@router.post("/channels/login")
-async def login_channel(request: Request, body: ChannelLoginRequest):
-    """Start QR-based channel login (WhatsApp). Returns SSE stream with QR data."""
-    mgr = _require_manager(request)
-
-    async def stream():
-        # Step 1: Ensure channel is registered (avoids "Install plugin?" interactive prompt)
-        yield _sse({"status": "starting", "message": f"Preparing {body.channel}..."})
-        add_result = await mgr.run_cli(
-            ["channels", "add", "--channel", body.channel, "--account", body.account],
-            timeout=30,
-        )
-        if not add_result["ok"]:
-            stderr = add_result["stderr"].strip()
-            if "already" not in stderr.lower() and "exists" not in stderr.lower():
-                yield _sse({"status": "error", "message": f"Failed to register channel: {stderr}"})
-                return
-
-        # Step 2: Stop gateway to avoid WhatsApp session conflict
-        was_running = mgr.is_running
-        if was_running and body.channel == "whatsapp":
-            yield _sse({"status": "progress", "message": "Pausing gateway..."})
-            await mgr.stop()
-
-        # Step 3: Run login
-        yield _sse({"status": "starting", "message": f"Starting {body.channel} login..."})
-        args = ["channels", "login", "--channel", body.channel, "--account", body.account]
-
-        qr_lines: list[str] = []
-        collecting_qr = False
-
-        try:
-            async for line in mgr.run_cli_stream(args, timeout=180):
-                if "[timeout]" in line:
-                    yield _sse({"status": "error", "message": "Login timed out"})
-                    return
-                if line == "[exit:0]":
-                    # Set sensible defaults for the channel (open DM, allow all)
-                    _set_channel_defaults(body.channel)
-                    # Restart gateway to load new credentials before telling frontend
-                    if was_running:
-                        try:
-                            openyak_port = request.url.port or 8000
-                            await mgr.start(openyak_port=openyak_port)
-                        except Exception as e:
-                            logger.warning("Gateway restart after login: %s", e)
-                    yield _sse({"status": "connected", "message": "Login successful!"})
-                    return
-                if "[error]" in line:
-                    msg = re.sub(r"\x1b\[[0-9;]*m", "", line.replace("[error] ", ""))
-                    # Don't treat as fatal — CLI may recover (e.g., clear old session + show new QR)
-                    yield _sse({"status": "progress", "message": msg})
-                    continue
-
-                # Strip ANSI codes but keep Unicode block chars (QR)
-                clean = re.sub(r"\x1b\[\??\d*[a-zA-Z]", "", line)
-                clean = re.sub(r"\x1b\[[0-9;]*m", "", clean)
-
-                # Detect QR code data URL (base64 PNG) — some versions emit this
-                if "data:image/" in clean:
-                    match = re.search(r"(data:image/[^\"'\s]+)", clean)
-                    if match:
-                        yield _sse({"status": "qr", "qr_data_url": match.group(1)})
-                        continue
-
-                # Detect Unicode block QR (characters like ▀▄█ etc.)
-                # QR lines contain many block characters (U+2580-U+259F range)
-                block_count = sum(1 for c in clean if "\u2580" <= c <= "\u259f")
-                if block_count > 10:
-                    collecting_qr = True
-                    qr_lines.append(clean)
-                    continue
-
-                # End of QR block — convert to PNG and send as data URL
-                if collecting_qr and block_count <= 10:
-                    collecting_qr = False
-                    if qr_lines:
-                        qr_text = "\n".join(qr_lines)
-                        data_url = _text_qr_to_data_url(qr_text)
-                        if data_url:
-                            yield _sse({"status": "qr", "qr_data_url": data_url})
-                        else:
-                            yield _sse({"status": "qr_text", "qr_text": qr_text})
-                        qr_lines = []
-
-                stripped = clean.strip()
-                if not stripped:
-                    continue
-
-                lower = stripped.lower()
-
-                # Detect connection success (avoid false positives like "Waiting for connection")
-                if any(phrase in lower for phrase in [
-                    "successfully", "logged in", "is now linked",
-                    "is ready", "linked!", "pairing complete",
-                    "account linked", "connection established",
-                ]):
-                    yield _sse({"status": "connected", "message": stripped})
-                    return
-
-                # Detect scan prompt
-                if "scan" in lower or "qr" in lower:
-                    yield _sse({"status": "waiting", "message": stripped})
-                    continue
-
-                # Generic progress
-                yield _sse({"status": "progress", "message": stripped})
-
-            # Flush remaining QR lines
-            if qr_lines:
-                qr_text = "\n".join(qr_lines)
-                data_url = _text_qr_to_data_url(qr_text)
-                if data_url:
-                    yield _sse({"status": "qr", "qr_data_url": data_url})
-                else:
-                    yield _sse({"status": "qr_text", "qr_text": qr_text})
-
-            yield _sse({"status": "done", "message": "Login process completed"})
-
-        except Exception as e:
-            yield _sse({"status": "error", "message": str(e)})
-            # Try to restart gateway on error too
-            if was_running and not mgr.is_running:
-                try:
-                    openyak_port = request.url.port or 8000
-                    await mgr.start(openyak_port=openyak_port)
-                except Exception:
-                    pass
-
-    return StreamingResponse(stream(), media_type="text/event-stream")
-
-
-@router.post("/channels/remove")
-async def remove_channel(request: Request, body: ChannelRemoveRequest) -> dict:
-    """Remove a channel account."""
-    mgr = _require_manager(request)
-
-    result = await mgr.run_cli(
-        ["channels", "remove", "--channel", body.channel, "--account", body.account, "--delete"],
-    )
-    if result["ok"]:
-        return {"ok": True, "message": f"{body.channel} removed"}
-    else:
-        msg = re.sub(r"\x1b\[[0-9;]*m", "", result["stderr"].strip() or result["stdout"].strip())
-        return {"ok": False, "message": msg}
-
-
-# ---------------------------------------------------------------------------
-# Channel listing
+# Channel CRUD
 # ---------------------------------------------------------------------------
 
 @router.get("/channels")
 async def list_channels(request: Request) -> dict:
-    """List configured channels via openclaw CLI."""
-    mgr = _get_openclaw_manager(request)
-    if mgr is None or not mgr.is_installed:
-        return {"channels": {}, "gateway_running": False}
+    """List all configured channels and their status."""
+    mgr = _get_channel_manager(request)
+    running_channels = mgr.get_status() if mgr else {}
 
-    running = mgr.is_running
+    # Also include configured-but-not-running channels from config
+    config = _load_config_dict()
+    all_channels: dict[str, Any] = {}
 
-    # Use CLI to get channel list (works even when gateway is stopped)
-    try:
-        result = await mgr.run_cli(["channels", "list", "--json"], timeout=15)
-        if result["ok"] and result["stdout"].strip():
-            data = json.loads(result["stdout"])
-            channels: dict[str, Any] = {}
+    for name, ch_config in config.get("channels", {}).items():
+        enabled = ch_config.get("enabled", False)
+        is_running = name in running_channels and running_channels[name].get("running", False)
+        all_channels[name] = {
+            "id": name,
+            "name": name.capitalize(),
+            "status": "running" if is_running else ("configured" if enabled else "disabled"),
+            "type": name,
+        }
 
-            # Format: { chat: { whatsapp: ["default"], telegram: ["default"] }, ... }
-            chat = data.get("chat") or {}
-            if isinstance(chat, dict):
-                for cid, accounts in chat.items():
-                    channels[cid] = {
-                        "id": cid,
-                        "name": cid.capitalize(),
-                        "status": "configured",
-                        "type": cid,
-                        "account": accounts[0] if isinstance(accounts, list) and accounts else "default",
-                    }
+    return {
+        "channels": all_channels,
+        "gateway_running": bool(running_channels),
+    }
 
-            # Also handle array/object formats as fallback
-            if not channels:
-                items = data if isinstance(data, list) else data.get("channels", data.get("accounts", []))
-                if isinstance(items, list):
-                    for item in items:
-                        cid = item.get("channel") or item.get("id") or "unknown"
-                        channels[cid] = {"id": cid, "name": cid.capitalize(), "status": "configured", "type": cid}
-                elif isinstance(items, dict):
-                    for cid, cdata in items.items():
-                        channels[cid] = {"id": cid, "name": cid.capitalize(), "status": "configured", "type": cid}
 
-            return {"channels": channels, "gateway_running": running}
-    except Exception as e:
-        logger.debug("channels list --json failed: %s", e)
+@router.post("/channels/add")
+async def add_channel(request: Request, body: ChannelAddRequest) -> dict:
+    """Add and enable a messaging channel.
 
-    # Fallback: query gateway health if running
-    if running:
+    Saves config and starts the channel immediately if possible.
+    """
+    config = _load_config_dict()
+    channels = config.setdefault("channels", {})
+
+    # Build channel config
+    ch_config: dict[str, Any] = {
+        "enabled": True,
+        "allow_from": body.allow_from or ["*"],
+    }
+
+    if body.channel == "telegram":
+        if not body.token:
+            raise HTTPException(400, "Telegram requires a bot token")
+        ch_config["token"] = body.token
+
+    elif body.channel == "discord":
+        if not body.token:
+            raise HTTPException(400, "Discord requires a bot token")
+        ch_config["token"] = body.token
+
+    elif body.channel == "slack":
+        if not body.bot_token or not body.app_token:
+            raise HTTPException(400, "Slack requires both bot_token and app_token")
+        ch_config["bot_token"] = body.bot_token
+        ch_config["app_token"] = body.app_token
+
+    elif body.channel == "feishu":
+        if not body.app_id or not body.app_secret:
+            raise HTTPException(400, "Feishu requires app_id and app_secret")
+        ch_config["app_id"] = body.app_id
+        ch_config["app_secret"] = body.app_secret
+
+    elif body.channel == "whatsapp":
+        ch_config["bridge_url"] = body.bridge_url or "ws://localhost:3001"
+
+    elif body.channel == "weixin":
+        ch_config["api_url"] = body.api_url or "http://localhost:9503"
+
+    elif body.channel in ("wecom", "dingtalk", "qq", "email", "matrix", "mochat", "websocket"):
+        # Accept generic extra config
+        if body.extra:
+            ch_config.update(body.extra)
+    else:
+        raise HTTPException(400, f"Unknown channel: {body.channel}")
+
+    if body.streaming:
+        ch_config["streaming"] = True
+
+    # Merge with existing config (don't overwrite fields not provided)
+    existing = channels.get(body.channel, {})
+    existing.update(ch_config)
+    channels[body.channel] = existing
+
+    _save_config_dict(config)
+
+    # Try to start the channel immediately
+    mgr = _get_channel_manager(request)
+    if mgr:
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{mgr.base_url}/health")
-                if resp.status_code < 400:
-                    data = resp.json()
-                    raw = data.get("channels") or {}
-                    channels = {}
-                    if isinstance(raw, dict):
-                        for cid, cdata in raw.items():
-                            if isinstance(cdata, dict):
-                                channels[cid] = {
-                                    "id": cid,
-                                    "name": cdata.get("name", cid),
-                                    "status": cdata.get("status", "unknown"),
-                                    "type": cid,
-                                }
-                    return {"channels": channels, "gateway_running": True}
+            from app.channels.registry import load_channel_class
+            cls = load_channel_class(body.channel)
+            channel_instance = cls(existing, mgr.bus)
+            mgr.add_channel(body.channel, channel_instance)
+
+            import asyncio
+            asyncio.create_task(channel_instance.start())
+
+            logger.info("Channel %s added and started", body.channel)
+        except Exception as e:
+            logger.warning("Channel %s configured but failed to start: %s", body.channel, e)
+            return {"ok": True, "message": f"{body.channel} configured (will start on restart): {e}"}
+
+    return {"ok": True, "message": f"{body.channel} channel added and started"}
+
+
+@router.post("/channels/login")
+async def login_channel(request: Request, body: ChannelLoginRequest):
+    """Start interactive login for a channel (e.g. WhatsApp QR).
+
+    Returns SSE stream with QR data and progress updates.
+    The frontend displays the QR code and waits for scan completion.
+    """
+    mgr = _get_channel_manager(request)
+    if mgr is None:
+        raise HTTPException(503, "Channel manager not initialized")
+
+    # For WhatsApp: run bridge login in subprocess with SSE streaming
+    if body.channel == "whatsapp":
+        return StreamingResponse(
+            _whatsapp_login_stream(mgr),
+            media_type="text/event-stream",
+        )
+
+    # For other channels: simple login
+    channel = mgr.get_channel(body.channel)
+    if channel is None:
+        raise HTTPException(404, f"Channel {body.channel} not configured")
+
+    try:
+        result = await channel.login(force=True)
+        return {"ok": result, "message": "Login completed" if result else "Login failed"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+async def _whatsapp_login_stream(mgr):
+    """Run WhatsApp bridge login and yield SSE events with QR codes."""
+    yield _sse({"status": "starting", "message": "Preparing WhatsApp login..."})
+
+    # Ensure bridge is set up
+    try:
+        from app.channels.helpers import get_bridge_install_dir
+        bridge_dir = get_bridge_install_dir()
+
+        # Check if bridge is built
+        if not (bridge_dir / "dist" / "index.js").exists():
+            # Try to find bridge from the bundled source
+            bundled = Path(__file__).parent.parent / "channels" / "bridge"
+            if bundled.exists():
+                # Install and build
+                yield _sse({"status": "progress", "message": "Installing WhatsApp bridge..."})
+                npm = shutil.which("npm")
+                if not npm:
+                    yield _sse({"status": "error", "message": "npm not found. Install Node.js first."})
+                    return
+
+                import shutil as _shutil
+                if bridge_dir != bundled:
+                    _shutil.copytree(str(bundled), str(bridge_dir), dirs_exist_ok=True)
+
+                proc = await asyncio.create_subprocess_exec(
+                    npm, "install",
+                    cwd=str(bridge_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.wait()
+                if proc.returncode != 0:
+                    stderr = (await proc.stderr.read()).decode()
+                    yield _sse({"status": "error", "message": f"Bridge install failed: {stderr[:300]}"})
+                    return
+
+                proc = await asyncio.create_subprocess_exec(
+                    npm, "run", "build",
+                    cwd=str(bridge_dir),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.wait()
+                if proc.returncode != 0:
+                    stderr = (await proc.stderr.read()).decode()
+                    yield _sse({"status": "error", "message": f"Bridge build failed: {stderr[:300]}"})
+                    return
+            else:
+                yield _sse({"status": "error", "message": "WhatsApp bridge not found."})
+                return
+    except Exception as e:
+        yield _sse({"status": "error", "message": f"Bridge setup failed: {e}"})
+        return
+
+    # Prepare bridge token and auth
+    from app.channels.helpers import get_runtime_subdir
+    import secrets
+
+    auth_dir = get_runtime_subdir("whatsapp-auth")
+    token_path = auth_dir / "bridge-token"
+    if token_path.exists():
+        bridge_token = token_path.read_text(encoding="utf-8").strip()
+    else:
+        bridge_token = secrets.token_urlsafe(32)
+        token_path.write_text(bridge_token, encoding="utf-8")
+
+    env = {**os.environ}
+    env["BRIDGE_TOKEN"] = bridge_token
+    env["AUTH_DIR"] = str(auth_dir)
+
+    npm = shutil.which("npm")
+    if not npm:
+        node = shutil.which("node")
+        if not node:
+            yield _sse({"status": "error", "message": "Node.js not found."})
+            return
+        cmd = [node, str(bridge_dir / "dist" / "index.js")]
+    else:
+        cmd = [npm, "start"]
+
+    yield _sse({"status": "starting", "message": "Starting WhatsApp login..."})
+
+    # Run bridge process and stream stdout for QR codes
+    q: _queue.Queue[str | None] = _queue.Queue()
+
+    def _reader(proc: subprocess.Popen) -> None:
+        try:
+            assert proc.stdout is not None
+            for raw in proc.stdout:
+                q.put(raw.decode(errors="replace").rstrip("\n"))
         except Exception:
             pass
+        finally:
+            q.put(None)
 
-    return {"channels": {}, "gateway_running": running}
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(bridge_dir),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+    t = threading.Thread(target=_reader, args=(proc,), daemon=True)
+    t.start()
 
+    qr_lines: list[str] = []
+    collecting_qr = False
+    deadline = asyncio.get_event_loop().time() + 180  # 3 minute timeout
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+    try:
+        while True:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                yield _sse({"status": "error", "message": "Login timed out"})
+                break
+
+            try:
+                line = await asyncio.to_thread(q.get, True, min(remaining, 2.0))
+            except Exception:
+                continue
+
+            if line is None:
+                break
+
+            # Strip ANSI codes
+            clean = re.sub(r"\x1b\[\??\d*[a-zA-Z]", "", line)
+            clean = re.sub(r"\x1b\[[0-9;]*m", "", clean)
+
+            # Detect QR code data URL
+            if "data:image/" in clean:
+                match = re.search(r"(data:image/[^\"'\s]+)", clean)
+                if match:
+                    yield _sse({"status": "qr", "qr_data_url": match.group(1)})
+                    continue
+
+            # Detect Unicode block QR
+            block_count = sum(1 for c in clean if "\u2580" <= c <= "\u259f")
+            if block_count > 10:
+                collecting_qr = True
+                qr_lines.append(clean)
+                continue
+
+            if collecting_qr and block_count <= 10:
+                collecting_qr = False
+                if qr_lines:
+                    qr_text = "\n".join(qr_lines)
+                    data_url = _text_qr_to_data_url(qr_text)
+                    if data_url:
+                        yield _sse({"status": "qr", "qr_data_url": data_url})
+                    else:
+                        yield _sse({"status": "qr_text", "qr_text": qr_text})
+                    qr_lines = []
+
+            stripped = clean.strip()
+            if not stripped:
+                continue
+
+            lower = stripped.lower()
+            if any(p in lower for p in [
+                "successfully", "logged in", "is now linked",
+                "is ready", "linked!", "pairing complete",
+                "account linked", "connection established",
+            ]):
+                yield _sse({"status": "connected", "message": stripped})
+                break
+
+            if "scan" in lower or "qr" in lower:
+                yield _sse({"status": "waiting", "message": stripped})
+                continue
+
+            yield _sse({"status": "progress", "message": stripped})
+
+        # Flush remaining QR
+        if qr_lines:
+            qr_text = "\n".join(qr_lines)
+            data_url = _text_qr_to_data_url(qr_text)
+            if data_url:
+                yield _sse({"status": "qr", "qr_data_url": data_url})
+            else:
+                yield _sse({"status": "qr_text", "qr_text": qr_text})
+
+    except Exception as e:
+        yield _sse({"status": "error", "message": str(e)})
+    finally:
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+        t.join(timeout=5)
+
+    if proc.returncode == 0:
+        yield _sse({"status": "connected", "message": "WhatsApp login successful!"})
+    elif proc.returncode is not None and proc.returncode != 0:
+        yield _sse({"status": "done", "message": "Login process completed"})
+
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-def _set_channel_defaults(channel: str) -> None:
-    """Set sensible defaults for a newly added channel.
-
-    By default OpenClaw uses dmPolicy=pairing which requires manual approval
-    for each new user. For OpenYak's use case (personal AI assistant), we
-    default to open access so messages are processed immediately.
-    """
-    from pathlib import Path
-
-    cfg_path = Path.home() / ".openclaw" / "openclaw.json"
-    if not cfg_path.exists():
-        return
-
-    try:
-        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-        ch = cfg.get("channels", {}).get(channel)
-        if not isinstance(ch, dict):
-            return
-
-        ch["dmPolicy"] = "open"
-        ch["allowFrom"] = ["*"]
-        if channel == "whatsapp":
-            ch["selfChatMode"] = True
-
-        cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-        logger.info("Set %s defaults: dmPolicy=open, allowFrom=[*]", channel)
-    except Exception as e:
-        logger.warning("Failed to set %s defaults: %s", channel, e)
-
-
 def _text_qr_to_data_url(qr_text: str) -> str | None:
-    """Convert Unicode block-character QR text to a PNG data URL.
-
-    The CLI renders QR using half-block characters (▀▄█ etc.) where each
-    character encodes 2 vertical pixels. We parse the matrix and render
-    a proper PNG using PIL.
-    """
+    """Convert Unicode block-character QR text to a PNG data URL."""
     try:
+        import base64
+        import io
         from PIL import Image
     except ImportError:
         return None
@@ -483,33 +505,23 @@ def _text_qr_to_data_url(qr_text: str) -> str | None:
     if not lines:
         return None
 
-    # Each Unicode half-block char encodes a top and bottom pixel:
-    # █ (U+2588) = black top + black bottom
-    # ▀ (U+2580) = black top + white bottom
-    # ▄ (U+2584) = white top + black bottom
-    # ' ' (space) = white top + white bottom
-    # ▐ ▌ etc. are less common but we handle the main ones
     width = max(len(l) for l in lines)
-    height = len(lines) * 2  # each text line = 2 pixel rows
 
-    # Build pixel matrix (True = black)
     pixels: list[list[bool]] = []
     for line in lines:
         top_row: list[bool] = []
         bot_row: list[bool] = []
         for ch in line:
-            if ch == "\u2588":      # █ full block
+            if ch == "\u2588":
                 top_row.append(True); bot_row.append(True)
-            elif ch == "\u2580":    # ▀ upper half
+            elif ch == "\u2580":
                 top_row.append(True); bot_row.append(False)
-            elif ch == "\u2584":    # ▄ lower half
+            elif ch == "\u2584":
                 top_row.append(False); bot_row.append(True)
             elif ch == " ":
                 top_row.append(False); bot_row.append(False)
             else:
-                # Treat unknown as black (safer for QR)
                 top_row.append(True); bot_row.append(True)
-        # Pad to uniform width
         while len(top_row) < width:
             top_row.append(False); bot_row.append(False)
         pixels.append(top_row)
@@ -518,11 +530,10 @@ def _text_qr_to_data_url(qr_text: str) -> str | None:
     if not pixels or not pixels[0]:
         return None
 
-    # Scale up for better readability (4x)
     scale = 4
     img_w = len(pixels[0]) * scale
     img_h = len(pixels) * scale
-    img = Image.new("1", (img_w, img_h), 1)  # 1-bit, white background
+    img = Image.new("1", (img_w, img_h), 1)
 
     for y, row in enumerate(pixels):
         for x, is_black in enumerate(row):
@@ -535,3 +546,27 @@ def _text_qr_to_data_url(qr_text: str) -> str | None:
     img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}"
+
+
+@router.post("/channels/remove")
+async def remove_channel(request: Request, body: ChannelRemoveRequest) -> dict:
+    """Remove a channel — stops it and removes from config."""
+    # Stop the running channel
+    mgr = _get_channel_manager(request)
+    if mgr:
+        channel = mgr.get_channel(body.channel)
+        if channel:
+            try:
+                await channel.stop()
+            except Exception as e:
+                logger.warning("Error stopping %s: %s", body.channel, e)
+        mgr.remove_channel(body.channel)
+
+    # Remove from config
+    config = _load_config_dict()
+    channels = config.get("channels", {})
+    if body.channel in channels:
+        del channels[body.channel]
+        _save_config_dict(config)
+
+    return {"ok": True, "message": f"{body.channel} removed"}

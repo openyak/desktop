@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "OpenYak",
-        "width": 1000,
-        "height": 700,
-        "minWidth": 800,
-        "minHeight": 600,
+        "width": 1200,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 640,
         "decorations": false,
         "visible": false,
         "center": true

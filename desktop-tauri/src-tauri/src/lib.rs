@@ -130,6 +130,24 @@ pub fn run() {
                 }
             });
 
+            // Ensure the window meets minimum size requirements after state restore.
+            // The window-state plugin may restore a size from a previous version
+            // where minWidth was lower (800). Clamp to current minimums so the
+            // sidebar is always visible on launch.
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(size) = window.inner_size() {
+                    let min_w = 1024_u32;
+                    let min_h = 640_u32;
+                    if size.width < min_w || size.height < min_h {
+                        let new_w = size.width.max(min_w);
+                        let new_h = size.height.max(min_h);
+                        let _ = window.set_size(tauri::Size::Physical(
+                            tauri::PhysicalSize::new(new_w, new_h),
+                        ));
+                    }
+                }
+            }
+
             // Create system tray once for background mode.
             tray::create_tray(&handle)?;
 
