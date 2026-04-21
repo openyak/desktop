@@ -221,22 +221,39 @@ def sanitize_llm_messages_for_request(
             continue
 
         remaining = max_request_chars - running
-        if not isinstance(c, str) or remaining < MIN_PARTIAL_MESSAGE_CHARS:
-            if not trimmed:
-                trimmed.append(m)
-                running += c_len
-            continue
-
         role = str(m.get("role", ""))
         kind = {
             "tool": "tool output",
             "assistant": "assistant content",
             "user": "user content",
         }.get(role, "message")
-        partial = dict(m)
-        partial["content"] = trim_for_context(c, remaining, kind)
-        trimmed.append(partial)
-        running += len(partial["content"])
+
+        if isinstance(c, str) and remaining >= MIN_PARTIAL_MESSAGE_CHARS:
+            partial = dict(m)
+            partial["content"] = trim_for_context(c, remaining, kind)
+            trimmed.append(partial)
+            running += len(partial["content"])
+            continue
+
+        if not trimmed:
+            trimmed.append(m)
+            running += c_len
+            continue
+
+        # Budget exhausted but older turns remain. Preserve the message
+        # envelope (and any tool_calls) so conversation shape survives, but
+        # collapse large string content to a tiny "truncated" marker rather
+        # than silently dropping the turn.
+        if isinstance(c, str) and c_len > MIN_PARTIAL_MESSAGE_CHARS:
+            stub = dict(m)
+            stub["content"] = (
+                f"[{kind} truncated for context: original {c_len} chars, kept 0]"
+            )
+            trimmed.append(stub)
+            running += len(stub["content"])
+        else:
+            trimmed.append(m)
+            running += c_len
     trimmed.reverse()
 
     logger.warning(
