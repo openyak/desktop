@@ -9,6 +9,7 @@ import {
   FolderClosed,
   FolderPlus,
   ListFilter,
+  Maximize2,
   Minimize2,
   MessageSquare,
   Clock3,
@@ -27,11 +28,22 @@ export function ProjectsToolbar({ projectDirectories }: ProjectsToolbarProps) {
   const { t } = useTranslation("common");
   const router = useRouter();
   const collapseAllProjects = useSidebarStore((s) => s.collapseAllProjects);
+  const expandAllProjects = useSidebarStore((s) => s.expandAllProjects);
+  const collapsedProjects = useSidebarStore((s) => s.collapsedProjects);
   const [isPickingDirectory, setIsPickingDirectory] = useState(false);
 
-  const handleCollapseAll = () => {
+  const allCollapsed =
+    projectDirectories.length > 0 &&
+    projectDirectories.every((d) => collapsedProjects[d]);
+  const toggleLabel = t(allCollapsed ? "expandAll" : "collapseAll");
+
+  const handleToggleAll = () => {
     if (projectDirectories.length === 0) return;
-    collapseAllProjects(projectDirectories);
+    if (allCollapsed) {
+      expandAllProjects();
+    } else {
+      collapseAllProjects(projectDirectories);
+    }
   };
 
   const handleAddProject = async () => {
@@ -56,15 +68,19 @@ export function ProjectsToolbar({ projectDirectories }: ProjectsToolbarProps) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={handleCollapseAll}
+            onClick={handleToggleAll}
             disabled={projectDirectories.length === 0}
             className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--sidebar-active)] hover:text-[var(--text-primary)] disabled:opacity-40"
-            aria-label={t("collapseAll")}
+            aria-label={toggleLabel}
           >
-            <Minimize2 className="h-3 w-3" />
+            {allCollapsed ? (
+              <Maximize2 className="h-3 w-3" />
+            ) : (
+              <Minimize2 className="h-3 w-3" />
+            )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top">{t("collapseAll")}</TooltipContent>
+        <TooltipContent side="top">{toggleLabel}</TooltipContent>
       </Tooltip>
 
       <FilterPopover />
@@ -158,7 +174,7 @@ function FilterPopover() {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+    <div className="px-2 pb-1 pt-1.5 text-ui-3xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
       {children}
     </div>
   );
@@ -180,7 +196,7 @@ function FilterRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
+        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
         "text-[var(--text-secondary)] hover:bg-[var(--sidebar-active)] hover:text-[var(--text-primary)]",
       )}
     >

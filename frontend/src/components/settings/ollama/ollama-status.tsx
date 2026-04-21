@@ -209,7 +209,7 @@ export function StatusBar({
               Ollama {status.version && `v${status.version}`}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-3 text-ui-3xs text-[var(--text-tertiary)]">
             <span className="flex items-center gap-1">
               <HardDrive className="h-3 w-3" />
               {formatBytes(status.disk_usage_bytes)}
@@ -217,7 +217,7 @@ export function StatusBar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[10px]"
+              className="h-6 px-2 text-ui-3xs"
               onClick={() => stopMutation.mutate()}
               disabled={stopMutation.isPending}
               title={t("ollamaStop", "Stop Ollama")}
@@ -231,7 +231,7 @@ export function StatusBar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[10px] text-[var(--text-tertiary)] hover:text-[var(--color-destructive)]"
+              className="h-6 px-2 text-ui-3xs text-[var(--text-tertiary)] hover:text-[var(--color-destructive)]"
               onClick={() => setShowRemoveConfirm(true)}
               title={t("ollamaRemove", "Remove Ollama")}
             >

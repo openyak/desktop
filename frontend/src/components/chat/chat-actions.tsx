@@ -15,55 +15,46 @@ interface ChatActionsProps {
 
 export function ChatActions({ isBusy, canSend, onSend, onStop }: ChatActionsProps) {
   const { t } = useTranslation("chat");
-  const showButton = isBusy || canSend;
+  const interactive = isBusy || canSend;
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex items-center gap-1">
-        <AnimatePresence>
-          {showButton && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={isBusy ? onStop : onSend}
+              disabled={!interactive}
+              aria-label={isBusy ? t("stopAction") : t("sendAction")}
             >
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="icon"
-                    className="h-8 w-8 rounded-full"
-                    onClick={isBusy ? onStop : onSend}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.span
-                        key={isBusy ? "stop" : "send"}
-                        initial={{ rotate: -90, opacity: 0 }}
-                        animate={{ rotate: 0, opacity: 1 }}
-                        exit={{ rotate: 90, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex items-center justify-center"
-                      >
-                        {isBusy ? (
-                          <Square className="h-3.5 w-3.5 fill-current" />
-                        ) : (
-                          <ArrowUp className="h-[18px] w-[18px]" />
-                        )}
-                      </motion.span>
-                    </AnimatePresence>
-                    <span className="sr-only">
-                      {isBusy ? t("stopAction") : t("sendAction")}
-                    </span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isBusy ? t("stopAction") : t("sendActionHint")}
-                </TooltipContent>
-              </Tooltip>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={isBusy ? "stop" : "send"}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center justify-center"
+                >
+                  {isBusy ? (
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                  ) : (
+                    <ArrowUp className="h-[18px] w-[18px]" />
+                  )}
+                </motion.span>
+              </AnimatePresence>
+              <span className="sr-only">
+                {isBusy ? t("stopAction") : t("sendAction")}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isBusy ? t("stopAction") : t("sendActionHint")}
+          </TooltipContent>
+        </Tooltip>
       </div>
     </TooltipProvider>
   );

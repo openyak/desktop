@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useSessions, useSearchSessions } from "@/hooks/use-sessions";
+import { IS_DESKTOP, TITLE_BAR_HEIGHT } from "@/lib/constants";
 import { getChatRoute } from "@/lib/routes";
 import { directoryLabelOf } from "@/lib/utils";
 import { useSidebarStore } from "@/stores/sidebar-store";
@@ -105,11 +106,13 @@ export function SearchCommandDialog() {
   }, [open, rows]);
 
   const hasQuery = query.trim().length > 0;
+  const desktopTopOffset = TITLE_BAR_HEIGHT + 48;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="top-[22%] max-w-[640px] gap-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--surface-primary)] p-0 shadow-[var(--shadow-lg)] [&>button]:hidden"
+        className="top-[96px] max-w-[640px] translate-y-0 gap-0 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--surface-primary)] p-0 shadow-[var(--shadow-lg)] data-[state=closed]:slide-out-to-top-[96px] data-[state=open]:slide-in-from-top-[96px] [&>button]:hidden"
+        style={IS_DESKTOP ? { top: desktopTopOffset } : undefined}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">{t("searchChats")}</DialogTitle>
@@ -121,7 +124,7 @@ export function SearchCommandDialog() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("searchChats")}
-              className="flex-1 bg-transparent text-[14px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
+              className="flex-1 bg-transparent text-base text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none"
             />
           </div>
           <CommandList className="max-h-[420px] p-1">
@@ -130,7 +133,7 @@ export function SearchCommandDialog() {
             ) : (
               <CommandGroup
                 heading={hasQuery ? t("searchResults") : t("recentChats")}
-                className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.12em] [&_[cmdk-group-heading]]:text-[var(--text-tertiary)]"
+                className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-ui-3xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.12em] [&_[cmdk-group-heading]]:text-[var(--text-tertiary)]"
               >
                 {rows.map((row, i) => {
                   const { session, snippet } = row;
@@ -144,24 +147,24 @@ export function SearchCommandDialog() {
                       key={session.id}
                       value={`${session.id} ${title}`}
                       onSelect={() => navigate(session)}
-                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-[var(--text-secondary)] data-[selected=true]:bg-[var(--sidebar-hover)] data-[selected=true]:text-[var(--text-primary)]"
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] data-[selected=true]:bg-[var(--sidebar-hover)] data-[selected=true]:text-[var(--text-primary)]"
                     >
-                      <MessageSquareText className="h-[14px] w-[14px] shrink-0 text-[var(--text-tertiary)]" />
+                      <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
                       <div className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate">{title}</span>
                         {snippet && (
-                          <span className="truncate text-[11px] text-[var(--text-tertiary)]">
+                          <span className="truncate text-ui-2xs text-[var(--text-tertiary)]">
                             …{snippet}…
                           </span>
                         )}
                       </div>
                       {label && (
-                        <span className="shrink-0 text-[11px] text-[var(--text-tertiary)]">
+                        <span className="shrink-0 text-ui-2xs text-[var(--text-tertiary)]">
                           {label}
                         </span>
                       )}
                       {i < KBD_SHORTCUT_COUNT && !hasQuery && (
-                        <kbd className="shrink-0 rounded border border-[var(--border-default)] px-1.5 py-0.5 text-[10px] font-normal text-[var(--text-tertiary)]">
+                        <kbd className="shrink-0 rounded border border-[var(--border-default)] px-1.5 py-0.5 text-ui-3xs font-normal text-[var(--text-tertiary)]">
                           ⌘{i + 1}
                         </kbd>
                       )}

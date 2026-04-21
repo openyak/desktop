@@ -159,14 +159,14 @@ function ConnectorsTab({ search }: { search: string }) {
     <>
       <div className="flex items-center justify-between mb-3">
         {!isLoading && (
-          <p className="text-[11px] text-[var(--text-tertiary)]">
+          <p className="text-ui-2xs text-[var(--text-tertiary)]">
             {t("connectedCount", { count: connectedCount })} / {entries.length}
           </p>
         )}
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px] px-2.5"
+          className="h-7 text-ui-2xs px-2.5"
           onClick={() => setShowAdd(!showAdd)}
         >
           <Plus className="h-3 w-3 mr-1" />
@@ -193,7 +193,7 @@ function ConnectorsTab({ search }: { search: string }) {
         <div className="space-y-5">
           {sortedCategories.map((cat) => (
             <div key={cat}>
-              <h3 className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+              <h3 className="text-ui-2xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
                 {t(categoryKey(cat), cat)} ({byCategory[cat].length})
               </h3>
               <div className="space-y-1.5">
@@ -292,22 +292,22 @@ function ConnectorRow({
             {connector.name}
           </span>
           {connector.type === "local" && id !== "google-workspace" && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
+            <span className="text-ui-3xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400">
               {t("localSetup")}
             </span>
           )}
           {connector.source === "custom" && (
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${SOURCE_COLORS.custom}`}>
+            <span className={`text-ui-3xs px-1.5 py-0.5 rounded-full ${SOURCE_COLORS.custom}`}>
               {t("custom")}
             </span>
           )}
           {connector.status === "connected" && connector.tools_count > 0 && (
-            <span className="text-[10px] text-[var(--text-tertiary)]">
+            <span className="text-ui-3xs text-[var(--text-tertiary)]">
               {connector.tools_count} {t("tools")}
             </span>
           )}
         </div>
-        <p className="text-[10px] text-[var(--text-tertiary)] truncate mt-0.5">
+        <p className="text-ui-3xs text-[var(--text-tertiary)] truncate mt-0.5">
           {connector.description}
         </p>
       </div>
@@ -318,7 +318,7 @@ function ConnectorRow({
           <Button
             variant="outline"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-ui-3xs px-2"
             onClick={handleConnect}
             disabled={isPending}
           >
@@ -347,13 +347,13 @@ function ConnectorRow({
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder={t("tokenPatPlaceholder")}
-              className="h-6 w-28 rounded border border-[var(--border-default)] bg-transparent px-1.5 text-[10px] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
+              className="h-6 w-28 rounded border border-[var(--border-default)] bg-transparent px-1.5 text-ui-3xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
             />
             <Button
               type="submit"
               variant="outline"
               size="sm"
-              className="h-6 text-[10px] px-2"
+              className="h-6 text-ui-3xs px-2"
               disabled={!tokenInput.trim() || setToken.isPending}
             >
               {setToken.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "OK"}
@@ -365,7 +365,7 @@ function ConnectorRow({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 text-[10px] px-1.5 text-[var(--text-tertiary)]"
+            className="h-6 text-ui-3xs px-1.5 text-[var(--text-tertiary)]"
             onClick={() => disconnect.mutate(id)}
             disabled={isPending}
             title={t("disconnect")}
@@ -378,7 +378,7 @@ function ConnectorRow({
           <Button
             variant="outline"
             size="sm"
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-ui-3xs px-2"
             onClick={() => reconnect.mutate(id)}
             disabled={isPending}
           >
@@ -454,10 +454,10 @@ function AddConnectorForm({ onClose }: { onClose: () => void }) {
         required
       />
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={onClose} type="button">
+        <Button variant="ghost" size="sm" className="h-7 text-ui-2xs" onClick={onClose} type="button">
           {t("cancel")}
         </Button>
-        <Button size="sm" className="h-7 text-[11px]" type="submit" disabled={addConnector.isPending}>
+        <Button size="sm" className="h-7 text-ui-2xs" type="submit" disabled={addConnector.isPending}>
           {addConnector.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
           {t("add")}
         </Button>
@@ -490,7 +490,7 @@ function PluginsTab({ search }: { search: string }) {
   return (
     <>
       {!isLoading && (
-        <p className="text-[11px] text-[var(--text-tertiary)] mb-3">
+        <p className="text-ui-2xs text-[var(--text-tertiary)] mb-3">
           {t("enabledCount", { count: enabledCount })} / {entries.length}
         </p>
       )}
@@ -622,7 +622,7 @@ function SkillGroup({
         <h3 className="text-xs font-semibold text-[var(--text-secondary)]">
           {title}
         </h3>
-        <span className="text-[10px] text-[var(--text-tertiary)]">
+        <span className="text-ui-3xs text-[var(--text-tertiary)]">
           ({skills.length})
         </span>
       </div>
@@ -640,14 +640,14 @@ function SkillGroup({
                     {skill.name}
                   </span>
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                    className={`text-ui-3xs px-1.5 py-0.5 rounded-full ${
                       SOURCE_COLORS[source] ?? SOURCE_COLORS.bundled
                     }`}
                   >
                     {skill.name.includes(":") ? skill.name.split(":")[0] : t(source, source)}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 line-clamp-2">
+                <p className="text-ui-2xs text-[var(--text-tertiary)] mt-0.5 line-clamp-2">
                   {skill.description}
                 </p>
               </div>
@@ -711,23 +711,23 @@ function PluginCard({
             <p className="text-sm font-medium text-[var(--text-primary)] truncate">
               {name}
             </p>
-            <span className="text-[10px] text-[var(--text-tertiary)]">
+            <span className="text-ui-3xs text-[var(--text-tertiary)]">
               {t("version", { version: plugin.version })}
             </span>
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              className={`text-ui-3xs px-1.5 py-0.5 rounded-full ${
                 SOURCE_COLORS[plugin.source] ?? SOURCE_COLORS.builtin
               }`}
             >
               {t(plugin.source)}
             </span>
           </div>
-          <p className="text-[11px] text-[var(--text-tertiary)] truncate mt-0.5">
+          <p className="text-ui-2xs text-[var(--text-tertiary)] truncate mt-0.5">
             {plugin.description}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 text-[11px] text-[var(--text-tertiary)]">
+        <div className="flex items-center gap-3 shrink-0 text-ui-2xs text-[var(--text-tertiary)]">
           <span className="flex items-center gap-1">
             <Sparkles className="h-3 w-3" />
             {plugin.skills_count}
@@ -779,7 +779,7 @@ function PluginDetailPanel({ name }: { name: string }) {
       {/* Skills */}
       {data.skills.length > 0 && (
         <div className="mb-3">
-          <h4 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+          <h4 className="text-ui-2xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
             {t("skills")} ({data.skills.length})
           </h4>
           <div className="space-y-1">
@@ -788,7 +788,7 @@ function PluginDetailPanel({ name }: { name: string }) {
                 <span className="text-xs font-mono text-[var(--text-primary)] shrink-0">
                   {skill.name}
                 </span>
-                <span className="text-[11px] text-[var(--text-tertiary)] truncate">
+                <span className="text-ui-2xs text-[var(--text-tertiary)] truncate">
                   {skill.description}
                 </span>
               </div>
@@ -800,7 +800,7 @@ function PluginDetailPanel({ name }: { name: string }) {
       {/* Required connectors */}
       {connectorIds.length > 0 && (
         <div>
-          <h4 className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+          <h4 className="text-ui-2xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
             {t("requiredConnectors")} ({connectorIds.length})
           </h4>
           <div className="flex flex-wrap gap-1.5">
@@ -813,7 +813,7 @@ function PluginDetailPanel({ name }: { name: string }) {
               return (
                 <span
                   key={cid}
-                  className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-primary)] rounded border border-[var(--border-default)] bg-[var(--surface-primary)] px-2 py-1"
+                  className="inline-flex items-center gap-1.5 text-ui-2xs text-[var(--text-primary)] rounded border border-[var(--border-default)] bg-[var(--surface-primary)] px-2 py-1"
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
                   {connector?.name ?? cid}

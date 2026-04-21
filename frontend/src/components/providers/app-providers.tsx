@@ -7,6 +7,7 @@ import { QueryProvider } from "./query-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Toaster } from "sonner";
 import { getBackendUrl, IS_DESKTOP } from "@/lib/constants";
+import { AppearanceInjector } from "@/components/layout/appearance-injector";
 import "@/i18n/config";
 import { useTranslation } from "react-i18next";
 
@@ -52,6 +53,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <QueryProvider>
         <LanguageSync />
+        <AppearanceInjector />
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

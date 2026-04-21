@@ -136,7 +136,7 @@ function LoopIterationsSlider({ value, onChange }: { value: number; onChange: (v
         />
         <span className="text-xs font-mono text-[var(--text-primary)] w-8 text-right">{value}</span>
       </div>
-      <p className="text-[10px] text-[var(--text-tertiary)] mt-1">{t("loopHint")}</p>
+      <p className="text-ui-3xs text-[var(--text-tertiary)] mt-1">{t("loopHint")}</p>
     </div>
   );
 }

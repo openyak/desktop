@@ -59,7 +59,7 @@ export function StatusBadge({ status, sessionId, t }: { status: string | null; s
   const loopSuffix = loopMatch ? ` ${loopMatch[1]}` : "";
 
   const badge = (
-    <span className={`inline-flex items-center gap-1 text-[10px] ${c.color}`}>
+    <span className={`inline-flex items-center gap-1 text-ui-3xs ${c.color}`}>
       <Icon className={`h-3 w-3 ${normalizedStatus === "running" ? "animate-spin" : ""}`} />
       {t(c.labelKey)}{loopSuffix}
     </span>
@@ -69,7 +69,7 @@ export function StatusBadge({ status, sessionId, t }: { status: string | null; s
     return (
       <Link
         href={`/c/${sessionId}`}
-        className={`inline-flex items-center gap-1 text-[10px] ${c.color} hover:underline`}
+        className={`inline-flex items-center gap-1 text-ui-3xs ${c.color} hover:underline`}
       >
         <Icon className="h-3 w-3" />
         {t(c.labelKey)}
@@ -92,7 +92,7 @@ export function TriggeredByBadge({ triggeredBy, t }: { triggeredBy: string; t: (
     startup_catchup:  { label: t("triggerCatchup"), color: "bg-purple-500/10 text-purple-400" },
   };
   const info = map[triggeredBy] || { label: triggeredBy, color: "bg-zinc-500/10 text-zinc-400" };
-  return <span className={`text-[10px] px-1.5 py-0.5 rounded ${info.color}`}>{info.label}</span>;
+  return <span className={`text-ui-3xs px-1.5 py-0.5 rounded ${info.color}`}>{info.label}</span>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -113,7 +113,7 @@ export function RunHistoryPanel({ automationId, t }: { automationId: string; t: 
   return (
     <div className="space-y-1.5 max-h-48 overflow-y-auto">
       {runs.map((run: TaskRunResponse) => (
-        <div key={run.id} className="flex items-center gap-2 text-[11px] px-1 py-1.5 rounded hover:bg-[var(--surface-secondary)]/50">
+        <div key={run.id} className="flex items-center gap-2 text-ui-2xs px-1 py-1.5 rounded hover:bg-[var(--surface-secondary)]/50">
           <StatusBadge status={run.status} sessionId={run.session_id} t={t} />
           <TriggeredByBadge triggeredBy={run.triggered_by} t={t} />
           <span className="text-[var(--text-tertiary)]">
@@ -247,7 +247,7 @@ export function ScheduleEditor({ scheduleType, setScheduleType, cronExpr, setCro
                 key={p.label}
                 type="button"
                 onClick={() => setDayPreset([...p.days])}
-                className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                className={`px-2 py-0.5 text-ui-3xs rounded border transition-colors ${
                   p.active
                     ? "border-[var(--text-primary)] text-[var(--text-primary)] bg-[var(--surface-secondary)]"
                     : "border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
@@ -265,7 +265,7 @@ export function ScheduleEditor({ scheduleType, setScheduleType, cronExpr, setCro
                 key={d}
                 type="button"
                 onClick={() => toggleDay(d)}
-                className={`flex-1 py-1.5 text-[11px] rounded-md border transition-colors ${
+                className={`flex-1 py-1.5 text-ui-2xs rounded-md border transition-colors ${
                   parsed.dow.includes(d)
                     ? "border-[var(--text-primary)] text-[var(--text-primary)] bg-[var(--surface-secondary)]"
                     : "border-[var(--border-default)] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
@@ -278,13 +278,13 @@ export function ScheduleEditor({ scheduleType, setScheduleType, cronExpr, setCro
 
           {/* Summary + raw cron toggle */}
           <div className="flex items-center justify-between">
-            <p className="text-[10px] text-[var(--text-tertiary)]">
+            <p className="text-ui-3xs text-[var(--text-tertiary)]">
               {humanizeCron(cronExpr, t)}
             </p>
             <button
               type="button"
               onClick={() => setShowRawCron(!showRawCron)}
-              className="text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+              className="text-ui-3xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
             >
               {showRawCron ? "—" : "cron"}
             </button>

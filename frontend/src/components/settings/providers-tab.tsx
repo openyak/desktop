@@ -421,7 +421,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
             <span className="text-xs font-medium text-center leading-tight">{label}</span>
             {mounted && connected && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--color-success)]" />}
             {activeProvider === mode && mounted && connected && (
-              <span className="absolute bottom-1 text-[9px] font-medium text-[var(--brand-primary)]">{t('activeProvider')}</span>
+              <span className="absolute bottom-1 text-ui-3xs font-medium text-[var(--brand-primary)]">{t('activeProvider')}</span>
             )}
           </button>
         ))}
@@ -496,7 +496,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
                 <span className="text-xs font-medium text-[var(--text-primary)]">{p.name}</span>
                 <div className="flex items-center gap-2">
                   {p.is_configured && p.enabled && (
-                    <span className="text-[10px] text-[var(--text-tertiary)]">{p.model_count} {t('providerModels')}</span>
+                    <span className="text-ui-3xs text-[var(--text-tertiary)]">{p.model_count} {t('providerModels')}</span>
                   )}
                   {p.is_configured && (
                     <button
@@ -682,11 +682,11 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-semibold">{p.name || t('customEndpoint')}</span>
-                        <span className="text-[var(--text-secondary)] font-mono ml-2 text-[10px] bg-[var(--surface-primary)] px-2 py-0.5 rounded">{p.base_url}</span>
-                        {p.masked_key && <span className="text-[var(--text-tertiary)] font-mono ml-2 text-[10px]">Key: {p.masked_key}</span>}
+                        <span className="text-[var(--text-secondary)] font-mono ml-2 text-ui-3xs bg-[var(--surface-primary)] px-2 py-0.5 rounded">{p.base_url}</span>
+                        {p.masked_key && <span className="text-[var(--text-tertiary)] font-mono ml-2 text-ui-3xs">Key: {p.masked_key}</span>}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-[var(--text-tertiary)]">{p.model_count} models</span>
+                        <span className="text-ui-3xs text-[var(--text-tertiary)]">{p.model_count} models</span>
                         <button
                           type="button"
                           onClick={() => updateCustomEndpoint.mutate({ id: p.id, enabled: !p.enabled })}

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { SquarePen } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { SettingsSidebar } from "@/components/settings/settings-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { ActivityPanel } from "@/components/activity/activity-panel";
 import { ArtifactPanel } from "@/components/artifacts/artifact-panel";
@@ -17,6 +18,7 @@ import { ConnectionStatus } from "@/components/layout/connection-status";
 import { RouteProgressBar } from "@/components/layout/route-progress-bar";
 import { SplashScreen } from "@/components/layout/splash-screen";
 import { TitleBar } from "@/components/desktop/title-bar";
+import { WindowTopIcons } from "@/components/layout/window-top-icons";
 import { UpdateBanner } from "@/components/desktop/update-banner";
 import { UpgradePrompt } from "@/components/billing/upgrade-prompt";
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen";
@@ -27,13 +29,14 @@ import { useSidebarStore } from "@/stores/sidebar-store";
 import { useSettingsStore, useSettingsHasHydrated } from "@/stores/settings-store";
 import { useAuthStore, useAuthHasHydrated } from "@/stores/auth-store";
 import { useAutoDetectProvider } from "@/hooks/use-auto-detect-provider";
+import { useIsMacOS } from "@/hooks/use-platform";
+import { useTraySync } from "@/hooks/use-tray-sync";
 import { useActivityStore } from "@/stores/activity-store";
 import { useArtifactStore } from "@/stores/artifact-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { api } from "@/lib/api";
 import {
   API,
-  SIDEBAR_WIDTH,
   ACTIVITY_PANEL_WIDTH,
   WORKSPACE_PANEL_WIDTH,
   IS_DESKTOP,
@@ -62,6 +65,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const isCollapsed = useSidebarStore((s) => s.isCollapsed);
   const toggleSidebar = useSidebarStore((s) => s.toggle);
+  const sidebarWidth = useSidebarStore((s) => s.width);
   const activityIsOpen = useActivityStore((s) => s.isOpen);
   const artifactIsOpen = useArtifactStore((s) => s.isOpen);
   const workspaceIsOpen = useWorkspaceStore((s) => s.isOpen);
@@ -69,8 +73,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const planReviewIsOpen = usePlanReviewStore((s) => s.isOpen);
   const planReviewWidth = usePlanReviewStore((s) => s.panelWidth);
   const isDesktop = useIsDesktop();
+  const isMac = useIsMacOS();
   const qc = useQueryClient();
   useAutoDetectProvider();
+  useTraySync();
 
   const authHydrated = useAuthHasHydrated();
   const settingsHydrated = useSettingsHasHydrated();
@@ -150,6 +156,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     };
   }, [router]);
 
+  // Toggle the `macos-vibrancy` class on <html> so globals.css can drop the
+  // body background and let NSVisualEffectView (applied natively by the
+  // window-vibrancy crate on macOS) show through transparent surfaces.
+  useEffect(() => {
+    if (!IS_DESKTOP) return;
+    const root = document.documentElement;
+    if (isMac) root.classList.add("macos-vibrancy");
+    return () => root.classList.remove("macos-vibrancy");
+  }, [isMac]);
+
   // Intercept clicks on external links and open them in the system browser
   // instead of navigating the Tauri webview (which blocks external URLs).
   useEffect(() => {
@@ -184,9 +200,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     closePlanReview();
   }, [pathname, closeActivity, closeArtifact, closePlanReview]);
 
-  const marginLeft = isDesktop && !isCollapsed ? SIDEBAR_WIDTH : 0;
   const isChatPage = pathname?.startsWith("/c/") ?? false;
+  const isSettingsPage = pathname?.startsWith("/settings") ?? false;
   const isActiveChat = isChatPage && pathname !== "/c/new";
+  // Settings replaces the sidebar with its own; always keep the gutter.
+  const marginLeft =
+    isDesktop && (isSettingsPage || !isCollapsed) ? sidebarWidth : 0;
   const showWorkspace = isDesktop && isActiveChat && workspaceIsOpen;
   const overlayWidth = artifactIsOpen
     ? artifactWidth
@@ -199,8 +218,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     ? Math.max(showWorkspace ? WORKSPACE_PANEL_WIDTH : 0, overlayWidth)
     : 0;
 
-  // Add top padding when the desktop title bar is active
-  const titleBarPadding = IS_DESKTOP ? TITLE_BAR_HEIGHT : 0;
+  // macOS uses native traffic lights overlay — page headers extend to the top.
+  // Windows/Linux keep the custom title bar as a real 32px row.
+  const titleBarPadding = IS_DESKTOP && !isMac ? TITLE_BAR_HEIGHT : 0;
 
   return (
     <div className="h-full overflow-hidden">
@@ -224,20 +244,27 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       {/* Desktop title bar (Electron only) */}
       <TitleBar />
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — Settings swaps in its own nav */}
       <div className="hidden lg:block">
-        <Sidebar />
+        {isSettingsPage ? <SettingsSidebar /> : <Sidebar />}
       </div>
+
+      {/* Floating window top-left icons (panel-left + new chat) — sit above
+          sidebar and chat header at a fixed x. Settings has its own nav. */}
+      {isDesktop && !isSettingsPage && <WindowTopIcons />}
 
       {/* Mobile nav drawer */}
       <MobileNav />
 
       {/* Collapsed quick actions for non-chat pages */}
-      {isDesktop && isCollapsed && !isChatPage && (
+      {isDesktop && isCollapsed && !isChatPage && !isSettingsPage && (
         <TooltipProvider delayDuration={200}>
           <div
-            className="fixed left-3 z-40 flex items-center gap-1 rounded-xl bg-[var(--surface-primary)]/80 backdrop-blur-sm px-1 py-0.5"
-            style={{ top: titleBarPadding + 8 }}
+            className="fixed z-40 flex items-center gap-1 rounded-xl bg-[var(--surface-primary)]/80 backdrop-blur-sm px-1 py-0.5"
+            style={{
+              top: isMac ? 16 : titleBarPadding + 8,
+              left: isMac ? 91 : 12,
+            }}
           >
             <Tooltip>
               <TooltipTrigger asChild>
@@ -277,7 +304,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <motion.main
         id="main-content"
         tabIndex={-1}
-        className="h-full flex flex-col outline-none"
+        className={`h-full flex flex-col outline-none vibrancy-opaque overflow-hidden${
+          marginLeft > 0
+            ? " rounded-tl-xl rounded-bl-xl border-l border-t border-b border-[var(--border-subtle)]"
+            : ""
+        }`}
         style={{
           paddingTop: titleBarPadding,
           marginLeft,

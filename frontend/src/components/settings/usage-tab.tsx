@@ -141,7 +141,7 @@ function FreeQuotaCard({
             {t("freeDailyQuota")}
           </span>
         </div>
-        <span className="text-[11px] text-[var(--text-secondary)] font-mono">
+        <span className="text-ui-2xs text-[var(--text-secondary)] font-mono">
           {formatQuotaTokens(used)} / {formatQuotaTokens(limit)}
         </span>
       </div>
@@ -168,7 +168,7 @@ function FreeQuotaCard({
               })
             : t("quotaRemaining", { remaining: formatQuotaTokens(remaining) })}
         </p>
-        <p className="text-[11px] text-[var(--text-tertiary)] whitespace-nowrap">
+        <p className="text-ui-2xs text-[var(--text-tertiary)] whitespace-nowrap">
           {t("resetsAtUtc")}
         </p>
       </div>
@@ -591,7 +591,7 @@ export function UsageTab() {
                                       style={{ width: `${Math.min(100, share)}%` }}
                                     />
                                   </div>
-                                  <span className="text-[10px] text-[var(--text-tertiary)] font-mono w-9 text-right">
+                                  <span className="text-ui-3xs text-[var(--text-tertiary)] font-mono w-9 text-right">
                                     {share.toFixed(0)}%
                                   </span>
                                 </div>

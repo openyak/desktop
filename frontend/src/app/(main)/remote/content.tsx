@@ -348,7 +348,7 @@ function ChannelsSection() {
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
           <span className="text-xs font-medium text-[var(--text-primary)]">Channel System</span>
-          <span className="text-[10px] text-[var(--text-tertiary)]">
+          <span className="text-ui-3xs text-[var(--text-tertiary)]">
             Built-in &middot; {Object.keys(channels).length} active
           </span>
         </div>
@@ -370,7 +370,7 @@ function ChannelsSection() {
                   {connected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
                 </div>
                 {!connected ? (
-                  <Button variant="outline" size="sm" className="h-6 text-[10px] px-2"
+                  <Button variant="outline" size="sm" className="h-6 text-ui-3xs px-2"
                     onClick={() => setExpandedPlatform(isExpanded ? null : p.id)}>
                     {isExpanded ? t("channelCancel") : t("channelConnect")}
                   </Button>
@@ -432,7 +432,7 @@ function TokenForm({ platform, onDone }: { platform: PlatformDef; onDone: () => 
     <div className="space-y-2">
       {platform.fields?.map((f) => (
         <div key={f.key} className="relative">
-          <label className="text-[10px] text-[var(--text-tertiary)] mb-0.5 block">{t(`fieldLabel_${platform.id}_${f.key}`, t(`fieldLabel_${f.key}`, f.label))}</label>
+          <label className="text-ui-3xs text-[var(--text-tertiary)] mb-0.5 block">{t(`fieldLabel_${platform.id}_${f.key}`, t(`fieldLabel_${f.key}`, f.label))}</label>
           <div className="relative">
             <input
               type={f.secret && !showSecret[f.key] ? "password" : "text"}
@@ -454,16 +454,16 @@ function TokenForm({ platform, onDone }: { platform: PlatformDef; onDone: () => 
 
       {platform.helpUrl && (
         <a href={platform.helpUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
+          className="inline-flex items-center gap-1 text-ui-3xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
           <ExternalLink className="h-2.5 w-2.5" />{t(`platformHelp_${platform.id}`, platform.help)}
         </a>
       )}
 
       {error && (
-        <p className="text-[11px] text-red-400">{error}</p>
+        <p className="text-ui-2xs text-red-400">{error}</p>
       )}
 
-      <Button size="sm" className="h-7 text-[11px] w-full" onClick={handleSubmit}
+      <Button size="sm" className="h-7 text-ui-2xs w-full" onClick={handleSubmit}
         disabled={addChannel.isPending}>
         {addChannel.isPending ? <><Loader2 className="h-3 w-3 animate-spin" />{t("channelConnecting")}</> : t("channelConnect")}
       </Button>
@@ -543,7 +543,7 @@ function QrLoginFlow({ channel, onDone }: { channel: string; onDone: () => void 
   }, [channel, onDone]);
 
   if (error) {
-    return <p className="text-[11px] text-red-400 py-2">{error}</p>;
+    return <p className="text-ui-2xs text-red-400 py-2">{error}</p>;
   }
 
   const hasQr = qrUrl || qrText;
@@ -556,14 +556,14 @@ function QrLoginFlow({ channel, onDone }: { channel: string; onDone: () => void 
         </div>
       ) : qrText ? (
         <div className="flex justify-center p-2 rounded-lg bg-white overflow-x-auto">
-          <pre className="text-black text-[6px] leading-[7px] font-mono whitespace-pre select-none">{qrText}</pre>
+          <pre className="text-black text-ui-qr font-mono whitespace-pre select-none">{qrText}</pre>
         </div>
       ) : (
         <div className="flex justify-center py-6">
           <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
         </div>
       )}
-      <p className="text-center text-[11px] text-[var(--text-secondary)]">{t(status, status)}</p>
+      <p className="text-center text-ui-2xs text-[var(--text-secondary)]">{t(status, status)}</p>
     </div>
   );
 }
@@ -575,7 +575,7 @@ function RemoveChannelButton({ channel, onRemoved }: { channel: string; onRemove
   const [removed, setRemoved] = useState(false);
 
   if (removed) {
-    return <span className="text-[10px] text-[var(--text-tertiary)]">{t("channelRemoved")}</span>;
+    return <span className="text-ui-3xs text-[var(--text-tertiary)]">{t("channelRemoved")}</span>;
   }
 
   const handleRemove = async () => {
@@ -588,11 +588,10 @@ function RemoveChannelButton({ channel, onRemoved }: { channel: string; onRemove
   };
 
   return (
-    <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 text-red-400 border-red-400/30 hover:bg-red-400/10"
+    <Button variant="outline" size="sm" className="h-6 text-ui-3xs px-2 text-red-400 border-red-400/30 hover:bg-red-400/10"
       disabled={removeChannel.isPending}
       onClick={handleRemove}>
       {removeChannel.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Unplug className="h-3 w-3" />{t("channelDisconnect")}</>}
     </Button>
   );
 }
-

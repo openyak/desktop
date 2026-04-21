@@ -3,7 +3,7 @@
 use tauri::{AppHandle, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{backend::BackendState, PendingNavigationState};
+use crate::{backend::BackendState, tray, PendingNavigationState};
 
 /// Get the backend URL (http://127.0.0.1:{port}).
 #[tauri::command]
@@ -123,4 +123,13 @@ pub async fn download_and_save(
         .map_err(|e| format!("Failed to write file: {e}"))?;
 
     Ok(true)
+}
+
+/// Replace the tray's Recent Chats list with the given sessions (top first).
+#[tauri::command]
+pub fn update_tray_recents(
+    app: AppHandle,
+    recents: Vec<tray::TrayRecent>,
+) -> Result<(), String> {
+    tray::set_tray_recents(&app, &recents).map_err(|e| e.to_string())
 }

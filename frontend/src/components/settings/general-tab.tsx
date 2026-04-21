@@ -8,10 +8,11 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { IS_DESKTOP } from "@/lib/constants";
 import { TextPart } from "@/components/parts/text-part";
+import { AppearanceCustomize } from "@/components/settings/appearance-customize";
 
 export function GeneralTab() {
   const { t, i18n } = useTranslation('settings');
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [appVersion, setAppVersion] = useState("0.0.1");
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "up-to-date" | "downloading" | "error">("idle");
@@ -80,12 +81,17 @@ export function GeneralTab() {
 
   const [showPreview, setShowPreview] = useState(false);
   const [proseFont, setProseFont] = useState<"serif" | "sans">("serif");
+  const activeAppearance = mounted
+    ? resolvedTheme === "light"
+      ? t("light")
+      : t("dark")
+    : null;
 
   return (
     <div className="space-y-8">
       {/* Theme Section */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+        <h2 className="text-ui-title-sm font-semibold text-[var(--text-primary)] mb-3">
           {t('appearance')}
         </h2>
         <div className="grid grid-cols-3 gap-2">
@@ -104,19 +110,30 @@ export function GeneralTab() {
               }`}
             >
               <Icon className="h-5 w-5" />
-              <span className="text-xs font-medium">{label}</span>
+              <span className="text-ui-caption font-medium">{label}</span>
             </button>
           ))}
         </div>
+        {activeAppearance && (
+          <p className="mt-3 text-ui-caption text-[var(--text-tertiary)]">
+            {theme === "system"
+              ? t("appearanceActiveSystem", { appearance: activeAppearance })
+              : t("appearanceActive", { appearance: activeAppearance })}
+          </p>
+        )}
 
         {/* Typography Preview */}
         <button
           onClick={() => setShowPreview(!showPreview)}
-          className="mt-3 flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+          className="mt-3 flex items-center gap-1.5 text-ui-caption text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
         >
           {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
           Typography Preview
         </button>
+        <div className="mt-6">
+          <AppearanceCustomize />
+        </div>
+
         {showPreview && (
           <>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -127,7 +144,7 @@ export function GeneralTab() {
                 <button
                   key={value}
                   onClick={() => setProseFont(value)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                  className={`rounded-lg border px-3 py-2 text-ui-caption font-medium transition-colors ${
                     proseFont === value
                       ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/5"
                       : "border-[var(--border-default)] hover:bg-[var(--surface-secondary)]"
@@ -151,7 +168,7 @@ export function GeneralTab() {
 
       {/* Language Section */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+        <h2 className="text-ui-title-sm font-semibold text-[var(--text-primary)] mb-3">
           {t('language')}
         </h2>
         <div className="grid grid-cols-2 gap-2">
@@ -171,7 +188,7 @@ export function GeneralTab() {
                   : "border-[var(--border-default)] hover:bg-[var(--surface-secondary)]"
               }`}
             >
-              <span className="text-xs font-medium">{label}</span>
+              <span className="text-ui-caption font-medium">{label}</span>
             </button>
           ))}
         </div>
@@ -181,10 +198,10 @@ export function GeneralTab() {
 
       {/* About */}
       <section>
-        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
+        <h2 className="text-ui-title-sm font-semibold text-[var(--text-primary)] mb-3">
           {t('about')}
         </h2>
-        <div className="text-xs text-[var(--text-secondary)] space-y-1">
+        <div className="text-ui-caption text-[var(--text-secondary)] space-y-1">
           <p>{t('aboutVersion', { version: appVersion })}</p>
           <p>{t('aboutDesc')}</p>
           <p>{t('aboutCopyright')}</p>
@@ -192,24 +209,24 @@ export function GeneralTab() {
         {IS_DESKTOP && (
           <div className="mt-3">
             {updateStatus === "idle" && (
-              <Button variant="outline" size="sm" className="text-xs h-7" onClick={checkForUpdate}>
+              <Button variant="outline" size="sm" className="text-ui-caption h-7" onClick={checkForUpdate}>
                 {t('checkForUpdates')}
               </Button>
             )}
             {updateStatus === "checking" && (
-              <Button variant="outline" size="sm" className="text-xs h-7" disabled>
+              <Button variant="outline" size="sm" className="text-ui-caption h-7" disabled>
                 <RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />
                 {t('checkForUpdates')}
               </Button>
             )}
             {updateStatus === "up-to-date" && (
-              <Button variant="outline" size="sm" className="text-xs h-7 text-green-500 border-green-500/30" disabled>
+              <Button variant="outline" size="sm" className="text-ui-caption h-7 text-green-500 border-green-500/30" disabled>
                 <Check className="h-3 w-3 mr-1.5" />
                 {t('upToDate')}
               </Button>
             )}
             {updateStatus === "available" && (
-              <Button size="sm" className="text-xs h-7" onClick={doUpdate}>
+              <Button size="sm" className="text-ui-caption h-7" onClick={doUpdate}>
                 {t('updateNow')} — v{updateVersion}
               </Button>
             )}
@@ -221,16 +238,16 @@ export function GeneralTab() {
                     style={{ width: `${downloadProgress}%` }}
                   />
                 </div>
-                <span className="text-xs text-[var(--text-secondary)]">{downloadProgress}%</span>
+                <span className="text-ui-caption text-[var(--text-secondary)]">{downloadProgress}%</span>
               </div>
             )}
             {updateStatus === "error" && (
               <div className="space-y-1.5">
-                <Button variant="outline" size="sm" className="text-xs h-7 text-[var(--color-destructive)]" onClick={checkForUpdate}>
+                <Button variant="outline" size="sm" className="text-ui-caption h-7 text-[var(--color-destructive)]" onClick={checkForUpdate}>
                   {t('checkForUpdates')}
                 </Button>
                 {updateError && (
-                  <p className="text-[10px] text-[var(--color-destructive)] break-all">{updateError}</p>
+                  <p className="text-ui-3xs text-[var(--color-destructive)] break-all">{updateError}</p>
                 )}
               </div>
             )}

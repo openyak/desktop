@@ -163,12 +163,12 @@ export const SessionItem = memo(function SessionItem({
             cancel();
           }}
           className={cn(
-            "group relative mx-3 flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg text-[13px] transition-colors duration-150 ease-out",
+            "group relative mx-3 flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg text-sm transition-colors duration-150 ease-out",
             indent ? "pl-9 pr-2" : "px-3",
             snippet ? "py-1.5" : "py-1",
             isActive
               ? "bg-[var(--sidebar-active)] text-[var(--text-primary)] shadow-[var(--sidebar-active-shadow)]"
-              : "text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]",
+              : "text-[var(--text-primary)] hover:bg-[var(--sidebar-hover)]",
             isEditing && "ring-1 ring-[var(--brand-primary)]",
           )}
         >
@@ -182,13 +182,13 @@ export const SessionItem = memo(function SessionItem({
                 onKeyDown={handleKeyDown}
                 onBlur={handleSubmitRename}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full border-b border-[var(--brand-primary)] bg-transparent py-0.5 text-[13px] text-[var(--text-primary)] outline-none"
+                className="w-full border-b border-[var(--brand-primary)] bg-transparent py-0.5 text-sm text-[var(--text-primary)] outline-none"
               />
             ) : (
               <>
                 <p
                   ref={titleRef}
-                  className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap text-[13px] leading-5"
+                  className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap text-sm leading-5"
                   style={scrollVars}
                 >
                   {channelBadge && (
@@ -204,7 +204,7 @@ export const SessionItem = memo(function SessionItem({
                   </span>
                 </p>
                 {snippet && (
-                  <p className="mt-0.5 truncate text-[11px] leading-4 text-[var(--text-tertiary)]">
+                  <p className="mt-0.5 truncate text-ui-2xs leading-4 text-[var(--text-tertiary)]">
                     …{snippet}…
                   </p>
                 )}
@@ -217,7 +217,7 @@ export const SessionItem = memo(function SessionItem({
             <>
               <span
                 aria-hidden
-                className="ml-auto shrink-0 text-[11px] text-[var(--text-tertiary)] opacity-100 transition-opacity group-hover:opacity-0"
+                className="ml-auto shrink-0 text-ui-2xs text-[var(--text-tertiary)] opacity-100 transition-opacity group-hover:opacity-0"
               >
                 {relativeTime}
               </span>

@@ -420,8 +420,8 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
       <div className="mx-auto max-w-3xl xl:max-w-4xl">
         <div
           className={cn(
-            "relative rounded-3xl border border-[var(--border-default)] bg-[var(--surface-secondary)] shadow-[var(--shadow-sm)] transition-all duration-200 focus-within:shadow-[var(--shadow-md)] focus-within:border-[var(--border-heavy)]",
-            isDragOver && "border-[var(--border-heavy)] bg-[var(--surface-tertiary)]",
+            "relative rounded-3xl bg-[var(--surface-secondary)] shadow-[var(--shadow-sm)] transition-all duration-200 focus-within:shadow-[var(--shadow-md)]",
+            isDragOver && "ring-1 ring-[var(--border-heavy)]",
           )}
           onDragOver={(e) => {
             e.preventDefault();
@@ -447,6 +447,10 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
             />
           )}
 
+          {/* Inner panel — lighter pill holding textarea + action bar.
+              Fully rounded so the bottom corners curve inward, letting the
+              darker outer frame the pill on all sides. */}
+          <div className="rounded-3xl bg-[var(--surface-tertiary)]">
           {/* Top section: file chips + textarea */}
           <div className="px-4 pt-3 pb-2">
             {/* File chips */}
@@ -501,7 +505,7 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
           </div>
 
           {/* Bottom action bar */}
-          <div className="flex items-center gap-2 px-3 pb-2.5">
+          <div className="flex items-center gap-2 px-3 pb-1.5">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -519,16 +523,12 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
             <button
                 type="button"
                 disabled={isInputDisabled}
-                className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full border border-[var(--border-default)] hover:bg-[var(--surface-tertiary)] transition-colors text-[var(--text-secondary)]"
+                className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full hover:bg-[var(--surface-tertiary)] transition-colors text-[var(--text-secondary)]"
                 aria-label={t('attachFile')}
                 onClick={handleBrowse}
               >
                 <Plus className="h-4 w-4" />
               </button>
-
-              <div className={cn(isInputDisabled && "pointer-events-none opacity-50")}>
-                <WorkspaceToggle sessionId={sessionId} directory={directory} isIndexing={isIndexing} />
-              </div>
 
             <div className={cn(isInputDisabled && "pointer-events-none opacity-50")}>
               <AgentToggle />
@@ -549,8 +549,16 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
               onStop={onStop}
             />
           </div>
-        </div>
+          </div>
 
+          {/* Context row — outer layer, lighter bg, visually wraps the inner panel */}
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-2",
+            isInputDisabled && "pointer-events-none opacity-50",
+          )}>
+            <WorkspaceToggle sessionId={sessionId} directory={directory} isIndexing={isIndexing} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -578,7 +586,7 @@ function AgentToggle() {
           type="button"
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors bg-[var(--surface-tertiary)] text-[var(--text-primary)] hover:bg-[var(--surface-tertiary)]/80"
         >
-          <span>{t("actionModePrefix")}: {active.label}</span>
+          <span>{active.label}</span>
           <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
         </button>
       </PopoverTrigger>

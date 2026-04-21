@@ -297,7 +297,9 @@ export const queryKeys = {
 } as const;
 
 /** UI constants */
-export const SIDEBAR_WIDTH = 280;
+export const SIDEBAR_WIDTH = 300;
+export const SIDEBAR_MIN_WIDTH = 240;
+export const SIDEBAR_MAX_WIDTH = 480;
 export const ACTIVITY_PANEL_WIDTH = 380;
 export const ARTIFACT_PANEL_WIDTH = 520;
 export const WORKSPACE_PANEL_WIDTH = 320;

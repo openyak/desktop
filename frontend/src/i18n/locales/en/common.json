@@ -36,6 +36,7 @@
   "recentChats": "Recent chats",
   "searchResults": "Results",
   "collapseAll": "Collapse all",
+  "expandAll": "Expand all",
   "addProject": "Add new project",
   "addProjectFailed": "Failed to select project directory",
   "filterSortOrganize": "Filter, sort, and organize chats",

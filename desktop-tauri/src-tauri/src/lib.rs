@@ -80,19 +80,37 @@ pub fn run() {
             commands::get_platform,
             commands::open_external,
             commands::download_and_save,
+            commands::update_tray_recents,
         ])
         // -- Setup --
         .setup(|app| {
             let handle = app.handle().clone();
 
+            // Windows/Linux use custom in-app title bar via CSS; strip native decorations.
+            // macOS window already has titleBarStyle=Overlay + hiddenTitle from config.
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_decorations(false);
+                }
+            }
+
             #[cfg(target_os = "macos")]
             {
-                // macOS: enable native traffic lights with overlay title bar.
-                // Config has decorations=false for Windows/Linux, so we override here.
+                // NSVisualEffectView vibrancy — the main window is configured
+                // `transparent: true`, so any semi-transparent CSS surface
+                // (sidebar, settings sidebar) now blurs the desktop wallpaper
+                // instead of the app's own flat background.
                 if let Some(window) = app.get_webview_window("main") {
-                    use tauri::TitleBarStyle;
-                    let _ = window.set_decorations(true);
-                    let _ = window.set_title_bar_style(TitleBarStyle::Overlay);
+                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                    if let Err(err) = apply_vibrancy(
+                        &window,
+                        NSVisualEffectMaterial::Sidebar,
+                        Some(NSVisualEffectState::Active),
+                        None,
+                    ) {
+                        log::warn!("Failed to apply window vibrancy: {err}");
+                    }
                 }
 
                 // Warn users when launching directly from mounted DMG volume.

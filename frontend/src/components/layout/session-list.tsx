@@ -17,7 +17,7 @@ import { SessionItem } from "./session-item";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
 import { ProjectsToolbar } from "./projects-toolbar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, MessageSquare, SearchX, ChevronRight, FolderClosed } from "lucide-react";
+import { Loader2, MessageSquare, SearchX, ChevronRight, FolderClosed, FolderOpen } from "lucide-react";
 import { getChatRoute } from "@/lib/routes";
 import { cn, groupSessionsByDate, groupSessionsByWorkspace } from "@/lib/utils";
 import type { SessionResponse } from "@/types/session";
@@ -478,7 +478,7 @@ export function SessionList() {
               >
                 {item.type === "header" ? (
                   <div className="flex items-center justify-between gap-2 pl-5 pr-3 pb-1 pt-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                    <p className="text-ui-3xs font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                       {t(item.label)}
                     </p>
                     {item.first && !hasSearch && (
@@ -489,7 +489,7 @@ export function SessionList() {
                   <button
                     type="button"
                     onClick={() => toggleProjectCollapsed(item.directory)}
-                    className="group mx-3 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                    className="group mx-3 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
                   >
                     <ChevronRight
                       className={cn(
@@ -497,7 +497,11 @@ export function SessionList() {
                         !item.collapsed && "rotate-90",
                       )}
                     />
-                    <FolderClosed className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+                    {item.collapsed ? (
+                      <FolderClosed className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)] transition-colors group-hover:text-[var(--text-secondary)]" />
+                    ) : (
+                      <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--text-primary)]" />
+                    )}
                     <span className="flex-1 truncate text-left">{item.label}</span>
                   </button>
                 ) : (

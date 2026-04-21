@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { SIDEBAR_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "@/lib/constants";
 
 export type OrganizeMode = "by-project" | "chronological" | "chats-first";
 export type SortBy = "created" | "updated";
@@ -22,6 +23,8 @@ interface SidebarStore {
   organizeMode: OrganizeMode;
   /** Which timestamp sessions are sorted by */
   sortBy: SortBy;
+  /** Current sidebar width (drag-resizable) */
+  width: number;
   setOpen: (open: boolean) => void;
   /** Toggle desktop sidebar collapse */
   toggle: () => void;
@@ -33,6 +36,11 @@ interface SidebarStore {
   setSortBy: (sortBy: SortBy) => void;
   collapseAllProjects: (directories: string[]) => void;
   expandAllProjects: () => void;
+  setWidth: (width: number) => void;
+}
+
+function clampWidth(w: number): number {
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, Math.round(w)));
 }
 
 export const useSidebarStore = create<SidebarStore>()(
@@ -46,6 +54,7 @@ export const useSidebarStore = create<SidebarStore>()(
       isSearchModalOpen: false,
       organizeMode: "by-project",
       sortBy: "updated",
+      width: SIDEBAR_WIDTH,
       setOpen: (open) => set({ isOpen: open }),
       toggle: () => set((s) => ({ isCollapsed: !s.isCollapsed })),
       toggleSearch: () =>
@@ -71,6 +80,7 @@ export const useSidebarStore = create<SidebarStore>()(
           return { collapsedProjects: next };
         }),
       expandAllProjects: () => set({ collapsedProjects: {} }),
+      setWidth: (width) => set({ width: clampWidth(width) }),
     }),
     {
       name: "openyak-sidebar",
@@ -78,7 +88,12 @@ export const useSidebarStore = create<SidebarStore>()(
         collapsedProjects: s.collapsedProjects,
         organizeMode: s.organizeMode,
         sortBy: s.sortBy,
+        width: s.width,
       }),
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<SidebarStore>) };
+        return { ...merged, width: clampWidth(merged.width ?? SIDEBAR_WIDTH) };
+      },
     },
   ),
 );

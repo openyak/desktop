@@ -370,7 +370,7 @@ export function BillingTab({ onNavigateTab }: BillingTabProps) {
           {t('buyCreditsDesc')}
         </p>
         <div className="mb-3 rounded-xl border border-[var(--border-default)] p-2">
-          <div className="text-[11px] text-[var(--text-tertiary)] mb-2">{t('paymentMethod')}</div>
+          <div className="text-ui-2xs text-[var(--text-tertiary)] mb-2">{t('paymentMethod')}</div>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -396,7 +396,7 @@ export function BillingTab({ onNavigateTab }: BillingTabProps) {
             </button>
           </div>
           {paymentChannel === "alipay" && (
-            <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">
+            <p className="mt-2 text-ui-2xs text-[var(--text-tertiary)]">
               {t('alipayNote')}
             </p>
           )}
@@ -421,7 +421,7 @@ export function BillingTab({ onNavigateTab }: BillingTabProps) {
                 }`}
               >
                 {i === 1 && (
-                  <span className="absolute -top-2.5 left-3 bg-[var(--brand-primary)] text-[var(--brand-primary-text)] text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                  <span className="absolute -top-2.5 left-3 bg-[var(--brand-primary)] text-[var(--brand-primary-text)] text-ui-3xs font-semibold px-2 py-0.5 rounded-full">
                     {t('popular')}
                   </span>
                 )}
@@ -479,7 +479,7 @@ export function BillingTab({ onNavigateTab }: BillingTabProps) {
                       <p className="text-xs text-[var(--text-primary)] truncate">
                         {tx.description}
                       </p>
-                      <p className="text-[10px] text-[var(--text-tertiary)]">
+                      <p className="text-ui-3xs text-[var(--text-tertiary)]">
                         {new Date(tx.time_created).toLocaleDateString(undefined, {
                           month: "short",
                           day: "numeric",
@@ -492,7 +492,7 @@ export function BillingTab({ onNavigateTab }: BillingTabProps) {
                       <p className={`text-xs font-mono font-medium ${transactionColor(tx.type)}`}>
                         {formatSignedUsd(tx.amount)}
                       </p>
-                      <p className="text-[10px] text-[var(--text-tertiary)] font-mono">
+                      <p className="text-ui-3xs text-[var(--text-tertiary)] font-mono">
                         {t('bal')}: {formatWholeUsd(tx.balance_after)}
                       </p>
                     </div>

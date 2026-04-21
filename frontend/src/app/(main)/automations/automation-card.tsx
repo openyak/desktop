@@ -62,7 +62,7 @@ export function AutomationCard({ automation: a, onEdit }: { automation: Automati
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(a.id)}>
             <span className="text-sm font-medium text-[var(--text-primary)] hover:underline">{a.name}</span>
             {a.description && (
-              <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 truncate">{a.description}</p>
+              <p className="text-ui-2xs text-[var(--text-tertiary)] mt-0.5 truncate">{a.description}</p>
             )}
           </div>
 
@@ -103,7 +103,7 @@ export function AutomationCard({ automation: a, onEdit }: { automation: Automati
         </div>
 
         {/* Row 2: Schedule + status meta */}
-        <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--text-tertiary)]">
+        <div className="flex items-center gap-3 mt-2 text-ui-2xs text-[var(--text-tertiary)]">
           <span className="inline-flex items-center gap-1">
             {a.loop_max_iterations ? (
               <>
@@ -150,13 +150,13 @@ export function AutomationCard({ automation: a, onEdit }: { automation: Automati
         {a.last_run_at && (
           <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[var(--border-default)]/50">
             <StatusBadge status={a.last_run_status} sessionId={a.last_session_id} t={t} />
-            <span className="text-[10px] text-[var(--text-tertiary)]">
+            <span className="text-ui-3xs text-[var(--text-tertiary)]">
               {relativeTime(a.last_run_at, t)}
             </span>
             {a.last_session_id && a.last_run_status !== "running" && (
               <Link
                 href={`/c/${a.last_session_id}`}
-                className="ml-auto text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] inline-flex items-center gap-0.5"
+                className="ml-auto text-ui-3xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] inline-flex items-center gap-0.5"
               >
                 {t("viewResult")}
                 <ArrowUpRight className="h-3 w-3" />

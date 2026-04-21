@@ -41,7 +41,7 @@ const cmd = [
   "npx concurrently -k",
   "-n backend,frontend,tauri",
   "-c blue,green,yellow",
-  `"cd backend && python -m uvicorn app.main:create_app --factory --reload --reload-dir app --host 0.0.0.0 --port ${backendPort}"`,
+  `"cd backend && venv/bin/python -m uvicorn app.main:create_app --factory --reload --reload-dir app --host 0.0.0.0 --port ${backendPort}"`,
   `"cd frontend && npx next dev --turbopack --port ${port}"`,
   `"cd desktop-tauri && cargo tauri dev"`,
 ].join(" ");

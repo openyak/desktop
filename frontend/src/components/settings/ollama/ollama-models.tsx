@@ -54,7 +54,7 @@ export function InstalledModelsList({
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] shrink-0" />
               <span className="text-xs font-mono truncate">{model.name}</span>
-              <span className="text-[10px] text-[var(--text-tertiary)] shrink-0">
+              <span className="text-ui-3xs text-[var(--text-tertiary)] shrink-0">
                 {formatBytes(model.size)}
               </span>
             </div>

@@ -1,5 +1,6 @@
 {
   "greeting": "What should OpenYak help you do?",
+  "greetingInWorkspace": "What should we do in {{workspace}}?",
   "subtitle": "Describe the result you want and add files or broader access only when needed.",
   "placeholder": "Describe the result you want",
   "noModelPlaceholder": "No model available — configure a provider in Settings first",
@@ -94,7 +95,6 @@
   "workspace": "Workspace",
   "workspaceCurrent": "Current workspace",
   "workspaceNone": "Entire computer",
-  "workspaceDisplayNone": "Access: Entire computer",
   "workspaceBrowse": "Browse",
   "workspaceClear": "Clear",
   "workspaceSet": "Set workspace",

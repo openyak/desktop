@@ -2,18 +2,21 @@
 
 import { useState, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SquarePen, Share2, Loader2, List, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Share2, Loader2, List, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { HeaderModelDropdown } from "@/components/selectors/header-model-dropdown";
 import { ContextIndicator } from "@/components/chat/context-indicator";
 import { Button } from "@/components/ui/button";
-import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useMessages } from "@/hooks/use-messages";
+import { useIsMacOS } from "@/hooks/use-platform";
+import {
+  WINDOW_TOP_ICONS_WIDTH_MAC,
+  WINDOW_TOP_ICONS_WIDTH_OTHER,
+} from "@/components/layout/window-top-icons";
 import { API, IS_DESKTOP, resolveApiUrl } from "@/lib/constants";
 import { isRemoteMode } from "@/lib/remote-connection";
 
@@ -25,10 +28,21 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
   const { t } = useTranslation('chat');
   const router = useRouter();
   const isCollapsed = useSidebarStore((s) => s.isCollapsed);
-  const toggle = useSidebarStore((s) => s.toggle);
   const { messages } = useMessages(sessionId);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const isMac = useIsMacOS();
   const remote = isRemoteMode();
+  // When sidebar is collapsed on desktop, the floating WindowTopIcons sit
+  // over the left edge of the chat area — reserve space so our own content
+  // doesn't hide beneath them. Remote mode has its own leading List button
+  // inside the header and doesn't show WindowTopIcons.
+  const reservesTopIconsSpace = IS_DESKTOP && isCollapsed && !remote;
+  const leftPad = reservesTopIconsSpace
+    ? isMac
+      ? WINDOW_TOP_ICONS_WIDTH_MAC
+      : WINDOW_TOP_ICONS_WIDTH_OTHER
+    : 12;
+  const macDragProps = IS_DESKTOP && isMac ? { "data-tauri-drag-region": "" } : {};
+  const [pdfLoading, setPdfLoading] = useState(false);
   const workspaceIsOpen = useWorkspaceStore((s) => s.isOpen);
   const toggleWorkspace = useWorkspaceStore((s) => s.toggle);
   const isGenerating = useChatStore((s) => s.isGenerating);
@@ -105,7 +119,10 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <header className="relative z-10 flex h-13 items-center gap-1 px-3 bg-[var(--surface-primary)]/80 backdrop-blur-sm">
+      <header
+        className="relative z-10 flex h-13 items-center gap-1 pr-3 backdrop-blur-sm"
+        style={{ paddingLeft: leftPad }}
+      >
         {/* Remote mode: task list button */}
         {remote && (
           <Button
@@ -119,33 +136,19 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
           </Button>
         )}
 
-        {/* Desktop mode: Sidebar toggle + new chat — visible when sidebar is collapsed */}
-        {!remote && isCollapsed && (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggle} aria-label={t('toggleSidebar', { ns: 'common' })}>
-                  <OpenYakLogo size={18} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('openSidebar', { ns: 'common' })}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={t('newChat', { ns: 'common' })} asChild>
-                  <Link href="/c/new">
-                    <SquarePen className="h-[18px] w-[18px]" />
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('newChat', { ns: 'common' })}</TooltipContent>
-            </Tooltip>
-          </>
-        )}
+        {/* Sidebar toggle + new chat live in the global WindowTopIcons bar
+            (desktop non-remote) so they stay at the window's left edge across
+            sidebar states. */}
 
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
           <HeaderModelDropdown />
         </div>
+
+        <div
+          {...macDragProps}
+          className="min-w-6 flex-1 self-stretch"
+          aria-hidden="true"
+        />
 
         {/* Export PDF — desktop only */}
         {!remote && sessionId && messages && messages.length > 0 && (

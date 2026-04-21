@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { IS_DESKTOP, TITLE_BAR_HEIGHT } from "@/lib/constants";
+import { useIsMacOS } from "@/hooks/use-platform";
 import {
   Sheet,
   SheetContent,
@@ -472,13 +473,15 @@ export function ActivityPanel() {
   const isOpen = useActivityStore((s) => s.isOpen);
   const close = useActivityStore((s) => s.close);
   const isDesktop = useIsDesktop();
+  const isMac = useIsMacOS();
+  const topOffset = IS_DESKTOP && !isMac ? TITLE_BAR_HEIGHT : 0;
 
   // Desktop: fixed right panel with smooth mount/unmount
   if (isDesktop) {
     return (
       <motion.aside
         className="fixed inset-y-0 right-0 z-[35] flex flex-col bg-[var(--surface-primary)] border-l border-[var(--border-default)] overflow-hidden"
-        style={{ width: ACTIVITY_PANEL_WIDTH, ...(IS_DESKTOP ? { top: TITLE_BAR_HEIGHT } : {}) }}
+        style={{ width: ACTIVITY_PANEL_WIDTH, top: topOffset }}
         initial={{ x: "100%" }}
         animate={{ x: 0 }}
         exit={{ x: "100%" }}

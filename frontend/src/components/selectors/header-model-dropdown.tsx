@@ -167,7 +167,7 @@ export function HeaderModelDropdown() {
       <button
         type="button"
         disabled
-        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-tertiary)] rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-default"
+        className="inline-flex h-7 max-w-[220px] items-center gap-1.5 rounded-lg border-none bg-transparent px-3 text-[13px] font-semibold text-[var(--text-tertiary)] shadow-none focus:outline-none cursor-default"
       >
         <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         <span className="truncate">{t("loadingModels", "Loading models...")}</span>
@@ -181,7 +181,7 @@ export function HeaderModelDropdown() {
       <button
         type="button"
         onClick={() => router.push("/settings?tab=providers")}
-        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
+        className="inline-flex h-7 max-w-[220px] items-center gap-1.5 rounded-lg border-none bg-transparent px-3 text-[13px] font-semibold text-[var(--text-secondary)] shadow-none transition-colors hover:bg-[var(--surface-secondary)] focus:outline-none cursor-pointer"
       >
         <span className="truncate">{t("setupProvider")}</span>
         <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
@@ -194,7 +194,7 @@ export function HeaderModelDropdown() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
+          className="inline-flex h-7 max-w-[220px] translate-y-[1px] items-center gap-1.5 rounded-lg border-none bg-transparent px-3 text-[13px] font-semibold text-[var(--text-primary)] shadow-none transition-colors hover:bg-[var(--surface-secondary)] focus:outline-none cursor-pointer"
         >
           <span className="truncate">{shortModel}</span>
           <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />

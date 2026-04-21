@@ -146,7 +146,7 @@ function TemplatesTab({ onCreated }: { onCreated: () => void }) {
               <span className="text-sm font-medium text-[var(--text-primary)]">{tpl.name}</span>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] line-clamp-2">{tpl.description}</p>
-            <div className="flex items-center gap-1 mt-2 text-[10px] text-[var(--text-tertiary)]">
+            <div className="flex items-center gap-1 mt-2 text-ui-3xs text-[var(--text-tertiary)]">
               {tpl.loop_max_iterations ? (
                 <>
                   <Repeat className="h-3 w-3" />

@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Settings, Cpu, Timer, Plug, Wifi, CreditCard, BarChart3, Brain } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,30 +16,18 @@ import { MemoryTab } from "@/components/settings/memory-tab";
 import { AutomationsTabContent } from "@/app/(main)/automations/content";
 import { PluginsTabContent } from "@/app/(main)/plugins/content";
 import { RemoteTabContent } from "@/app/(main)/remote/content";
+import { SETTINGS_TABS, type SettingsTabId } from "./settings-tabs";
 
 const UsageTab = dynamic(
   () => import("@/components/settings/usage-tab").then((mod) => ({ default: mod.UsageTab })),
   { ssr: false, loading: () => <UsageSkeleton /> },
 );
 
-const SETTINGS_TABS = [
-  { id: "general", icon: Settings, labelKey: "tabGeneral" },
-  { id: "providers", icon: Cpu, labelKey: "tabProviders" },
-  { id: "automations", icon: Timer, labelKey: "tabAutomations" },
-  { id: "plugins", icon: Plug, labelKey: "tabPlugins" },
-  { id: "remote", icon: Wifi, labelKey: "tabRemote" },
-  { id: "billing", icon: CreditCard, labelKey: "tabBilling" },
-  { id: "usage", icon: BarChart3, labelKey: "tabUsage" },
-  { id: "memory", icon: Brain, labelKey: "tabMemory" },
-] as const;
-
-type TabId = (typeof SETTINGS_TABS)[number]["id"];
-
 export default function SettingsPageClient() {
   const { t } = useTranslation(["settings", "billing", "usage"]);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = (searchParams.get("tab") as TabId) || "general";
+  const activeTab = (searchParams.get("tab") as SettingsTabId) || "general";
 
   const navigateTab = useCallback(
     (tab: string) => {
@@ -48,22 +36,26 @@ export default function SettingsPageClient() {
     [router],
   );
 
+  const activeLabel = t(
+    `settings:${SETTINGS_TABS.find((x) => x.id === activeTab)?.labelKey ?? "tabGeneral"}`,
+  );
+
   return (
     <div className="flex-1 overflow-y-auto scrollbar-auto">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 lg:py-10">
+        {/* Header — mobile back button + current section title */}
+        <div className="flex items-center gap-3 mb-6">
           <Button variant="ghost" size="icon" className="h-8 w-8 lg:hidden" asChild>
             <Link href="/c/new">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-            {t("settings:title")}
+          <h1 className="text-ui-xl font-semibold text-[var(--text-primary)]">
+            {activeLabel}
           </h1>
         </div>
 
-        {/* Mobile tab pills */}
+        {/* Mobile tab pills — desktop uses the SettingsSidebar instead */}
         <div className="flex gap-1 overflow-x-auto pb-4 lg:hidden">
           {SETTINGS_TABS.map(({ id, icon: Icon, labelKey }) => (
             <button
@@ -82,40 +74,16 @@ export default function SettingsPageClient() {
           ))}
         </div>
 
-        {/* Desktop: left nav + content */}
-        <div className="lg:grid lg:grid-cols-[200px_1fr] lg:gap-8">
-          {/* Left nav (desktop only) */}
-          <nav className="hidden lg:block">
-            <div className="sticky top-8 space-y-1">
-              {SETTINGS_TABS.map(({ id, icon: Icon, labelKey }) => (
-                <button
-                  key={id}
-                  onClick={() => navigateTab(id)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors",
-                    activeTab === id
-                      ? "bg-[var(--surface-secondary)] text-[var(--text-primary)] font-medium"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]",
-                  )}
-                >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
-                  {t(`settings:${labelKey}`)}
-                </button>
-              ))}
-            </div>
-          </nav>
-
-          {/* Tab content */}
-          <div className="min-w-0">
-            {activeTab === "general" && <GeneralTab />}
-            {activeTab === "providers" && <ProvidersTab onNavigateTab={navigateTab} />}
-            {activeTab === "automations" && <AutomationsTabContent />}
-            {activeTab === "plugins" && <PluginsTabContent />}
-            {activeTab === "remote" && <RemoteTabContent />}
-            {activeTab === "billing" && <BillingTab onNavigateTab={navigateTab} />}
-            {activeTab === "usage" && <UsageTab />}
-            {activeTab === "memory" && <MemoryTab />}
-          </div>
+        {/* Tab content */}
+        <div className="min-w-0">
+          {activeTab === "general" && <GeneralTab />}
+          {activeTab === "providers" && <ProvidersTab onNavigateTab={navigateTab} />}
+          {activeTab === "automations" && <AutomationsTabContent />}
+          {activeTab === "plugins" && <PluginsTabContent />}
+          {activeTab === "remote" && <RemoteTabContent />}
+          {activeTab === "billing" && <BillingTab onNavigateTab={navigateTab} />}
+          {activeTab === "usage" && <UsageTab />}
+          {activeTab === "memory" && <MemoryTab />}
         </div>
       </div>
     </div>

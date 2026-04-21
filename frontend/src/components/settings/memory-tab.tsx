@@ -97,7 +97,7 @@ function WorkspaceMemoryItem({
             </span>
           </button>
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[11px] text-[var(--text-quaternary)] mr-2">
+            <span className="text-ui-2xs text-[var(--text-quaternary)] mr-2">
               {t("memoryLines", { count: item.line_count })}
               {lastUpdated && ` \u00b7 ${lastUpdated}`}
             </span>
@@ -131,7 +131,7 @@ function WorkspaceMemoryItem({
         </div>
 
         {/* Full path */}
-        <p className="text-[11px] text-[var(--text-quaternary)] mb-2 truncate" title={item.workspace_path}>
+        <p className="text-ui-2xs text-[var(--text-quaternary)] mb-2 truncate" title={item.workspace_path}>
           {item.workspace_path}
         </p>
 
@@ -142,7 +142,7 @@ function WorkspaceMemoryItem({
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                className="w-full min-h-[160px] max-h-[400px] rounded-lg border border-[var(--border-default)] bg-[var(--surface-primary)] px-3 py-2 text-[12px] font-mono text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:ring-1 focus:ring-[var(--ring)] resize-y"
+                className="w-full min-h-[160px] max-h-[400px] rounded-lg border border-[var(--border-default)] bg-[var(--surface-primary)] px-3 py-2 text-xs font-mono text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:ring-1 focus:ring-[var(--ring)] resize-y"
                 placeholder="Workspace memory (Markdown)..."
               />
               <div className="flex gap-2 justify-end">
@@ -168,7 +168,7 @@ function WorkspaceMemoryItem({
             </div>
           ) : (
             <div className="max-h-[300px] overflow-y-auto scrollbar-auto">
-              <pre className="text-[12px] text-[var(--text-secondary)] whitespace-pre-wrap break-words font-mono leading-relaxed">
+              <pre className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap break-words font-mono leading-relaxed">
                 {item.content || "(empty)"}
               </pre>
             </div>

@@ -46,9 +46,7 @@ export function WorkspaceToggle({ sessionId, directory, isIndexing }: WorkspaceT
   // Resolved values depending on context
   const currentPath = sessionId ? directory : globalWorkspace;
   const displayName = getDisplayName(currentPath);
-  const pillLabel = displayName
-    ? `${t("accessLabel")}: ${displayName}`
-    : t("workspaceDisplayNone");
+  const pillLabel = displayName ?? t("workspaceNone");
 
   // Handle directory selection from either native picker (desktop) or mobile browser
   const applySelectedPath = useCallback(async (path: string) => {

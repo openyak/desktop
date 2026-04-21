@@ -7,6 +7,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+export interface TrayRecent {
+  id: string;
+  title: string | null;
+}
+
 export interface DesktopAPI {
   getBackendUrl: () => Promise<string>;
   getPendingNavigation: () => Promise<string | null>;
@@ -17,6 +22,7 @@ export interface DesktopAPI {
   maximize: () => Promise<void>;
   close: () => Promise<void>;
   isMaximized: () => Promise<boolean>;
+  updateTrayRecents: (recents: TrayRecent[]) => Promise<void>;
   onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
   onBackendRestarting: (callback: () => void) => () => void;
   onBackendRestart: (callback: (newUrl: string) => void) => () => void;
@@ -24,6 +30,7 @@ export interface DesktopAPI {
   onNavigate: (callback: (path: string) => void) => () => void;
   onToggleSidebar: (callback: () => void) => () => void;
   onCheckForUpdates: (callback: () => void) => () => void;
+  onOpenSearch: (callback: () => void) => () => void;
 }
 
 /** Helper to turn a Tauri `listen` promise into a sync cleanup function. */
@@ -58,6 +65,7 @@ export const desktopAPI: DesktopAPI = {
   maximize: () => invoke("window_maximize"),
   close: () => invoke("window_close"),
   isMaximized: () => invoke<boolean>("is_maximized"),
+  updateTrayRecents: (recents) => invoke("update_tray_recents", { recents }),
   onMaximizeChange: (callback) =>
     listenSync<boolean>("maximize-change", callback),
   onBackendRestarting: (callback) =>
@@ -69,4 +77,5 @@ export const desktopAPI: DesktopAPI = {
   onNavigate: (callback) => listenSync<string>("navigate", callback),
   onToggleSidebar: (callback) => listenSync<void>("toggle-sidebar", callback),
   onCheckForUpdates: (callback) => listenSync<void>("check-for-updates", callback),
+  onOpenSearch: (callback) => listenSync<void>("open-search", callback),
 };

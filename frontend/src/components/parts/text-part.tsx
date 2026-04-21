@@ -97,11 +97,6 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
     const text = String(children).trim();
     const isFilePath = looksLikeFilePath(text);
     const fileName = text.split(/[\\/]/).pop() || text;
-    const directoryHint = text.includes("/")
-      ? text.slice(0, Math.max(0, text.lastIndexOf("/")))
-      : text.includes("\\")
-        ? text.slice(0, Math.max(0, text.lastIndexOf("\\")))
-        : "";
 
     if (isFilePath) {
       const hasPathSegments = /[/\\]/.test(text);
@@ -137,19 +132,12 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
           <button
             type="button"
             onClick={handleOpen}
-            className="inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2.5 py-1.5 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2 py-1 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
             title={text}
           >
             <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-            <span className="min-w-0">
-              <span className="block truncate text-[0.9em] font-medium text-[var(--text-primary)]">
-                {fileName}
-              </span>
-              {directoryHint && (
-                <span className="block truncate text-[0.72em] text-[var(--text-tertiary)]">
-                  {directoryHint}
-                </span>
-              )}
+            <span className="truncate text-[0.9em] font-medium text-[var(--text-primary)]">
+              {fileName}
             </span>
           </button>
         );
@@ -165,19 +153,12 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
           <button
             type="button"
             onClick={handleSystemOpen}
-            className="inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2.5 py-1.5 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2 py-1 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
             title={text}
           >
             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-            <span className="min-w-0">
-              <span className="block truncate text-[0.9em] font-medium text-[var(--text-primary)]">
-                {fileName}
-              </span>
-              {directoryHint && (
-                <span className="block truncate text-[0.72em] text-[var(--text-tertiary)]">
-                  {directoryHint}
-                </span>
-              )}
+            <span className="truncate text-[0.9em] font-medium text-[var(--text-primary)]">
+              {fileName}
             </span>
           </button>
         );
