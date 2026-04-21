@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
+  Loader2,
   FileText,
   Play,
   Search,
@@ -196,6 +197,7 @@ function ToolRow({ tool }: { tool: ToolPart }) {
   const { t } = useTranslation("chat");
   const [isOpen, setIsOpen] = useState(false);
   const ToolIcon = TOOL_ICONS[tool.tool] ?? Plug;
+  const isRunning = tool.state.status === "running" || tool.state.status === "pending";
   const isError = tool.state.status === "error";
   const elapsed = getElapsed(tool);
   const title = getToolTitle(tool);
@@ -214,7 +216,9 @@ function ToolRow({ tool }: { tool: ToolPart }) {
     <div className="relative pl-7">
       {/* Timeline dot */}
       <div className="absolute left-0 top-1 flex items-center justify-center">
-        {isError ? (
+        {isRunning ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--text-tertiary)]" />
+        ) : isError ? (
           <XCircle className="h-3.5 w-3.5 text-[var(--tool-error)]" />
         ) : (
           <CheckCircle2 className="h-3.5 w-3.5 text-[var(--tool-completed)]" />
@@ -351,6 +355,11 @@ function ActivityPanelContent() {
   // Compute total duration
   const duration = computeDuration(activeData);
   const durationLabel = duration != null && duration > 0 ? `${duration}s` : "";
+  const hasRunningTools = activeData.toolParts.some(
+    (tool) => tool.state.status === "running" || tool.state.status === "pending",
+  );
+  const hasTerminalStepFinish = stepFinishes.some((part) => part.reason !== "tool_use");
+  const isComplete = (hasTerminalStepFinish || !!activeData.hasVisibleOutput) && !hasRunningTools;
 
   return (
     <div className="flex flex-col h-full">
@@ -395,18 +404,28 @@ function ActivityPanelContent() {
             ),
           )}
 
-          {/* Done footer */}
-          <div className="relative pl-7">
-            <div className="absolute left-0 top-0.5 flex items-center justify-center">
-              <CheckCircle2 className="h-3.5 w-3.5 text-[var(--tool-completed)]" />
+          {isComplete ? (
+            <div className="relative pl-7">
+              <div className="absolute left-0 top-0.5 flex items-center justify-center">
+                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--tool-completed)]" />
+              </div>
+              {durationLabel && (
+                <p className="text-[11px] text-[var(--text-tertiary)]">
+                  {t("thoughtFor", { duration: durationLabel })}
+                </p>
+              )}
+              <p className="text-[13px] font-medium text-[var(--text-secondary)]">{t("done")}</p>
             </div>
-            {durationLabel && (
-              <p className="text-[11px] text-[var(--text-tertiary)]">
-                {t("thoughtFor", { duration: durationLabel })}
+          ) : (
+            <div className="relative pl-7">
+              <div className="absolute left-0 top-0.5 flex items-center justify-center">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--text-tertiary)]" />
+              </div>
+              <p className="text-[13px] font-medium text-[var(--text-secondary)]">
+                {hasRunningTools ? t("stageWorkingWithTools") : t("stageFinalizing")}
               </p>
-            )}
-            <p className="text-[13px] font-medium text-[var(--text-secondary)]">{t("done")}</p>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Metrics */}

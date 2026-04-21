@@ -18,7 +18,7 @@ import asyncio
 import datetime
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -30,6 +30,7 @@ from app.agent.permission import (
 )
 from app.provider.registry import ProviderRegistry
 from app.schemas.chat import PromptRequest
+from app.schemas.message import StepFinishReason
 from app.session.llm import stream_llm
 from app.session.manager import (
     create_part,
@@ -66,6 +67,7 @@ from app.config import get_settings
 from app.session.utils import (
     calculate_step_cost as _calculate_step_cost,
     compute_safe_max_tokens as _compute_safe_max_tokens,
+    get_effective_context_window as _get_effective_context_window,
     repair_tool_call_payload as _repair_tool_call_payload,
     strip_image_content as _strip_image_content,
 )
@@ -89,6 +91,16 @@ _MODIFYING_TOOLS = frozenset({"edit", "write", "bash", "code_execute"})
 # Accessed via _cfg() to avoid stale module-level reads.
 def _cfg():
     return get_settings()
+
+
+def _normalize_step_finish_reason(reason: str | None) -> StepFinishReason:
+    """Normalize provider/internal finish reasons to the frontend contract."""
+    if reason == "tool_calls":
+        return "tool_use"
+    if reason in {"stop", "tool_use", "length", "error"}:
+        return cast(StepFinishReason, reason)
+    logger.warning("Unexpected step finish reason %r; normalizing to 'error'", reason)
+    return "error"
 
 
 # --- Daily web_search quota tracking (single-user desktop app) ---
@@ -387,7 +399,7 @@ class SessionProcessor:
                 safe_max_tokens = _compute_safe_max_tokens(
                     self._llm_messages,
                     model_max_context=(
-                        sp.model_info.capabilities.max_context if sp.model_info else 8192
+                        _get_effective_context_window(sp.model_info) if sp.model_info else 8192
                     ),
                     model_max_output=(
                         sp.model_info.capabilities.max_output if sp.model_info else None
@@ -691,11 +703,9 @@ class SessionProcessor:
                             self.usage_data = chunk.data
 
                         case "finish":
-                            raw_reason = chunk.data.get("reason", "stop")
-                            # Normalize: OpenAI uses "tool_calls", we use "tool_use"
-                            if raw_reason == "tool_calls":
-                                raw_reason = "tool_use"
-                            self.finish_reason = raw_reason
+                            self.finish_reason = _normalize_step_finish_reason(
+                                chunk.data.get("reason", "stop")
+                            )
 
                         case "error":
                             if accumulated_text:
@@ -812,15 +822,48 @@ class SessionProcessor:
                 return "compact"
 
             logger.exception("LLM stream error (not retryable or retries exhausted)")
-            if accumulated_text:
+            had_visible_text = bool(accumulated_text.strip())
+            self.has_text = had_visible_text
+            self.finish_reason = "error"
+            if accumulated_text or accumulated_reasoning:
                 async with session_factory() as db:
                     async with db.begin():
+                        if accumulated_text:
+                            await create_part(
+                                db,
+                                message_id=self._assistant_msg_id,
+                                session_id=job.session_id,
+                                data={"type": "text", "text": accumulated_text},
+                            )
+                        if accumulated_reasoning:
+                            await create_part(
+                                db,
+                                message_id=self._assistant_msg_id,
+                                session_id=job.session_id,
+                                data={"type": "reasoning", "text": accumulated_reasoning},
+                            )
                         await create_part(
                             db,
                             message_id=self._assistant_msg_id,
                             session_id=job.session_id,
-                            data={"type": "text", "text": accumulated_text},
+                            data={
+                                "type": "step-finish",
+                                "reason": self.finish_reason,
+                                "tokens": self.usage_data,
+                                "cost": self.step_cost,
+                            },
                         )
+                job.publish(
+                    SSEEvent(
+                        STEP_FINISH,
+                        {
+                            "tokens": self.usage_data,
+                            "cost": self.step_cost,
+                            "total_cost": sp.total_cost + self.step_cost,
+                            "reason": self.finish_reason,
+                        },
+                    )
+                )
             await _delete_empty_assistant_messages(session_factory, job.session_id)
             job.publish(SSEEvent(AGENT_ERROR, {"error_message": f"LLM stream error: {stream_error}"}))
             return "stop"
@@ -841,8 +884,19 @@ class SessionProcessor:
                 "LLM produced no output after retries for session %s, continuing loop",
                 job.session_id,
             )
-            # Publish a paired STEP_FINISH so the frontend step tracker stays consistent
-            job.publish(SSEEvent(STEP_FINISH, {"tokens": None, "cost": 0.0, "total_cost": sp.total_cost, "reason": "empty"}))
+            # Publish a paired non-terminal STEP_FINISH so the frontend step tracker
+            # stays consistent without seeing an undeclared terminal reason.
+            job.publish(
+                SSEEvent(
+                    STEP_FINISH,
+                    {
+                        "tokens": None,
+                        "cost": 0.0,
+                        "total_cost": sp.total_cost,
+                        "reason": "tool_use",
+                    },
+                )
+            )
             await _delete_empty_assistant_messages(session_factory, job.session_id)
             return "continue"
 
@@ -959,6 +1013,21 @@ class SessionProcessor:
                             file_path=result.metadata["file_path"],
                             tool_id=tool.id,
                         )
+
+                    # Track files created or modified inside code_execute runs.
+                    if (
+                        tool.id == "code_execute"
+                        and result.success
+                        and result.metadata
+                        and result.metadata.get("written_files")
+                    ):
+                        for file_path in result.metadata["written_files"]:
+                            await _track_session_file(
+                                session_factory,
+                                session_id=job.session_id,
+                                file_path=file_path,
+                                tool_id=tool.id,
+                            )
 
                     # Track artifacts as workspace files (save to disk)
                     if (
@@ -1083,6 +1152,13 @@ class SessionProcessor:
                 self.usage_data.get("cache_write", 0),
             )
 
+        # If this step produced tool calls, the agent loop is not actually
+        # finished yet, even if the provider reported a generic "stop".
+        # Surface that as "tool_use" so the frontend keeps streaming UI alive
+        # until the follow-up step completes.
+        if has_tool_calls and self.finish_reason != "tool_use":
+            self.finish_reason = "tool_use"
+
         # --- Step finish ---
         job.publish(
             SSEEvent(
@@ -1114,7 +1190,7 @@ class SessionProcessor:
         if self.usage_data and sp.model_info:
             from app.session.compaction import should_compact
 
-            max_ctx = sp.model_info.capabilities.max_context
+            max_ctx = _get_effective_context_window(sp.model_info) or sp.model_info.capabilities.max_context
             max_out = sp.model_info.capabilities.max_output
             if should_compact(self.usage_data, max_ctx, model_max_output=max_out):
                 logger.info("Context overflow detected, running compaction")
@@ -1245,5 +1321,3 @@ async def _update_tool_part_error(
                 )
     except Exception:
         logger.warning("Failed to persist error state for tool %s", tool_name)
-
-

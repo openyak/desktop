@@ -93,22 +93,46 @@ function Scratchpad() {
 
 export function FilesCard() {
   const workspaceFiles = useWorkspaceStore((s) => s.workspaceFiles);
+  const scratchpadContent = useWorkspaceStore((s) => s.scratchpadContent);
   const collapsed = useWorkspaceStore((s) => s.collapsedSections["files"]);
   const toggleSection = useWorkspaceStore((s) => s.toggleSection);
+  const hasContent = workspaceFiles.length > 0 || scratchpadContent.trim().length > 0;
+  const latestFile = workspaceFiles[workspaceFiles.length - 1];
 
   return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-secondary)] overflow-hidden">
+    <div className="overflow-hidden rounded-3xl border border-white/8 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset] backdrop-blur-sm">
       <button
-        className="flex items-center justify-between w-full px-4 py-3 text-left transition-colors"
+        className="flex w-full items-start justify-between px-4 py-4 text-left transition-colors hover:bg-white/[0.02]"
         onClick={() => toggleSection("files")}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-[var(--text-primary)]">
-            Files
-          </span>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.04]">
+            <FolderOpen className="h-4 w-4 text-[var(--text-tertiary)]" />
+          </div>
+          <div className="min-w-0">
+            <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+              Files
+            </span>
+            <span className="mt-1 block text-[12px] text-[var(--text-tertiary)]">
+              {workspaceFiles.length > 0
+                ? `${workspaceFiles.length} generated file${workspaceFiles.length === 1 ? "" : "s"}`
+                : hasContent
+                  ? "Notes available"
+                  : "No files yet"}
+            </span>
+            {latestFile && (
+              <span className="mt-2 block truncate text-[12px] text-[var(--text-secondary)]">
+                Latest: {latestFile.name}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <FolderOpen className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+        <div className="ml-3 flex items-center gap-2">
+          {workspaceFiles.length > 0 && (
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+              {workspaceFiles.length}
+            </span>
+          )}
           <ChevronDown
             className={cn(
               "h-4 w-4 text-[var(--text-tertiary)] transition-transform duration-200",
@@ -126,7 +150,7 @@ export function FilesCard() {
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="overflow-hidden"
           >
-            <div className="pb-1">
+            <div className="border-t border-white/6 pb-1 pt-2">
               {workspaceFiles.length > 0 ? (
                 <div className="space-y-0.5">
                   {workspaceFiles.map((file) => (

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minimize2, Check, Scissors, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { CompactionPart as CompactionPartType, CompactionPhaseState } from "@/types/message";
+import type { CompactionPart as CompactionPartType } from "@/types/message";
 
 interface CompactionPartProps {
   data?: CompactionPartType;

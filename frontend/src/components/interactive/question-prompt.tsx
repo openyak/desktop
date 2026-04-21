@@ -323,7 +323,6 @@ function MultiQuestionPrompt({
                                 setAnswer(q.question, opt.label);
                               }
                             }}
-                            tabIndex={optIdx}
                             isMobile
                           />
                         ))}
@@ -451,7 +450,6 @@ function MultiQuestionPrompt({
                         setAnswer(currentQ.question, opt.label);
                       }
                     }}
-                    tabIndex={i}
                   />
                 ))}
 
@@ -528,7 +526,6 @@ function OptionRow({
   multiSelect,
   selected,
   onSelect,
-  tabIndex,
   isMobile,
 }: {
   option: QuestionOptionItem;
@@ -536,7 +533,6 @@ function OptionRow({
   multiSelect: boolean;
   selected: boolean;
   onSelect: () => void;
-  tabIndex: number;
   isMobile?: boolean;
 }) {
   return (

@@ -27,7 +27,6 @@ export function useUpdateCheck(): UpdateInfo {
   const [progress, setProgress] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateRef = useRef<any>(null);
 
   const checkNow = useCallback(async () => {
@@ -57,7 +56,6 @@ export function useUpdateCheck(): UpdateInfo {
     let totalLength = 0;
     let downloaded = 0;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await update.downloadAndInstall((event: any) => {
         if (event.event === "Started" && event.data.contentLength) {
           totalLength = event.data.contentLength;

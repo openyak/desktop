@@ -16,7 +16,8 @@ interface KeyboardShortcutsOptions {
  * Global keyboard shortcuts for the app
  *
  * Shortcuts:
- * - Cmd/Ctrl + K: New chat
+ * - Cmd/Ctrl + K: Toggle search command palette (handled globally by SearchCommandDialog)
+ * - Cmd/Ctrl + Shift + K: New chat
  * - Esc: Stop generation
  * - Cmd/Ctrl + Shift + C: Copy last message
  */
@@ -52,8 +53,8 @@ export function useKeyboardShortcuts({
       // Don't process other shortcuts when typing
       if (isTyping) return;
 
-      // Cmd/Ctrl + K: New chat
-      if (modKey && e.key === "k") {
+      // Cmd/Ctrl + Shift + K: New chat
+      if (modKey && e.shiftKey && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         router.push("/c/new");
         return;

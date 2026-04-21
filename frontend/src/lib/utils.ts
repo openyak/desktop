@@ -78,3 +78,39 @@ export function groupSessionsByDate<T extends { time_updated: string }>(
     .filter(([, items]) => items.length > 0)
     .map(([label, items]) => ({ label, sessions: items }));
 }
+
+export interface WorkspaceGroup<T> {
+  directory: string;
+  label: string;
+  sessions: T[];
+}
+
+export function normalizeDirectory(directory: string): string {
+  return directory.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+export function directoryLabelOf(directory: string): string {
+  const normalized = normalizeDirectory(directory);
+  return normalized.split("/").pop() || normalized;
+}
+
+export function groupSessionsByWorkspace<T extends { directory: string | null }>(
+  sessions: T[],
+): { projects: WorkspaceGroup<T>[]; chats: T[] } {
+  const projects = new Map<string, WorkspaceGroup<T>>();
+  const chats: T[] = [];
+  for (const s of sessions) {
+    if (!s.directory || s.directory === ".") {
+      chats.push(s);
+      continue;
+    }
+    const dir = normalizeDirectory(s.directory);
+    const existing = projects.get(dir);
+    if (existing) {
+      existing.sessions.push(s);
+    } else {
+      projects.set(dir, { directory: dir, label: directoryLabelOf(dir), sessions: [s] });
+    }
+  }
+  return { projects: Array.from(projects.values()), chats };
+}

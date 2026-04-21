@@ -7,12 +7,14 @@ of the JSON payloads, not the ORM models themselves.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel
 
 
 # --- Part types (discriminated union via 'type' field) ---
+
+StepFinishReason: TypeAlias = Literal["stop", "tool_use", "length", "error"]
 
 
 class TextPart(BaseModel):
@@ -51,7 +53,7 @@ class StepStartPart(BaseModel):
 
 class StepFinishPart(BaseModel):
     type: Literal["step-finish"] = "step-finish"
-    reason: str  # "stop" | "tool_use" | "length" | "error"
+    reason: StepFinishReason
     tokens: dict[str, int] = {}
     cost: float = 0.0
 
@@ -125,7 +127,7 @@ class AssistantMessageInfo(BaseModel):
     cost: float = 0.0
     tokens: TokenUsage = TokenUsage()
     error: str | None = None
-    finish: str | None = None  # "stop" | "tool_use" | "length" | "error"
+    finish: StepFinishReason | None = None
     summary: bool = False
     mode: str | None = None
 

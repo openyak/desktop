@@ -382,6 +382,27 @@ async def get_message_history_for_llm(
     messages = await get_messages(db, session_id)
     llm_messages = []
 
+    # After a compaction summary is written, that summary becomes the new
+    # history anchor. Everything before it has already been summarized and
+    # should not be fed back to the model again.
+    compaction_anchor = 0
+    for i, msg in enumerate(messages):
+        has_compaction_part = any(
+            p.data and p.data.get("type") == "compaction"
+            for p in msg.parts
+        )
+        has_summary_text = any(
+            p.data
+            and p.data.get("type") == "text"
+            and str(p.data.get("text", "")).startswith("[Context Summary]")
+            for p in msg.parts
+        )
+        if has_compaction_part and has_summary_text:
+            compaction_anchor = i
+
+    if compaction_anchor:
+        messages = messages[compaction_anchor:]
+
     max_assistant_text_chars = 40_000
     max_tool_output_chars = 20_000
 

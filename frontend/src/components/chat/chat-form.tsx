@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Check, ChevronDown, Plus } from "lucide-react";
@@ -17,12 +17,14 @@ import type { FileSearchResult } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import type { FileAttachment } from "@/types/chat";
 import { useArtifactStore } from "@/stores/artifact-store";
+import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProviderModels } from "@/hooks/use-provider-models";
 import { useIndexStatus } from "@/hooks/use-index-status";
 
 interface ChatFormProps {
   isGenerating: boolean;
+  isCompacting?: boolean;
   onSend: (text: string, attachments?: FileAttachment[]) => Promise<boolean> | void;
   onStop: () => void;
   className?: string;
@@ -149,7 +151,7 @@ function detectMention(
   return { active: true, query, startIndex: atIndex };
 }
 
-export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, directory }: ChatFormProps) {
+export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, className, sessionId, directory }: ChatFormProps) {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -203,6 +205,20 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
   const globalWorkspace = useSettingsStore((s) => s.workspaceDirectory);
   const effectiveWorkspace = hasWorkspace ? directory : globalWorkspace;
   const { isIndexing } = useIndexStatus(effectiveWorkspace, sessionId);
+  const compactingLabel = useChatStore((s) => {
+    for (let i = s.streamingParts.length - 1; i >= 0; i -= 1) {
+      const part = s.streamingParts[i];
+      if (part.type !== "compaction" || part.compactionStatus !== "in_progress") continue;
+      const activePhase = part.phases?.find((phase) => phase.status === "started");
+      if (!activePhase) return null;
+      if (activePhase.phase === "prune") return "prune";
+      if (activePhase.phase === "summarize" && activePhase.chars && activePhase.chars > 0) {
+        return `summarize:${activePhase.chars}`;
+      }
+      return "summarize";
+    }
+    return null;
+  });
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     setUploading(true);
@@ -227,10 +243,10 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
     } finally {
       setUploading(false);
     }
-  }, [sessionId, effectiveWorkspace]);
+  }, [effectiveWorkspace, sessionId, t]);
 
   const handleSend = useCallback(async () => {
-    if (sendingRef.current || (!input.trim() && attachments.length === 0) || isGenerating) return;
+    if (sendingRef.current || (!input.trim() && attachments.length === 0) || isGenerating || isCompacting) return;
     sendingRef.current = true;
     try {
       const text = input;
@@ -255,7 +271,7 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
     } finally {
       sendingRef.current = false;
     }
-  }, [input, attachments, isGenerating, onSend, ref, draftKey]);
+  }, [input, attachments, isGenerating, isCompacting, onSend, ref, draftKey]);
 
   const handleBrowse = useCallback(async () => {
     setUploading(true);
@@ -280,7 +296,7 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
     } finally {
       setUploading(false);
     }
-  }, [sessionId, effectiveWorkspace]);
+  }, [effectiveWorkspace, sessionId, t]);
 
   const handleRemoveAttachment = useCallback((fileId: string) => {
     setAttachments((prev) => prev.filter((a) => a.file_id !== fileId));
@@ -385,6 +401,19 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
   }, [fixRequest, clearFixRequest, ref, resize]);
 
   const suggestions = attachmentSuggestions(attachments, t);
+  const compactingStatusText = useMemo(() => {
+    if (!isCompacting) return null;
+    if (!compactingLabel) return t("contextCompactingNow");
+    if (compactingLabel === "prune") return t("contextCompactingPrune");
+    if (compactingLabel === "summarize") return t("contextCompactingSummarize");
+    if (compactingLabel.startsWith("summarize:")) {
+      const chars = Number(compactingLabel.split(":")[1] || 0);
+      return t("contextCompactingSummarizeProgress", { chars });
+    }
+    return t("contextCompactingNow");
+  }, [compactingLabel, isCompacting, t]);
+
+  const isInputDisabled = isGenerating || isCompacting || noModelsAvailable;
 
   return (
     <div className={cn("px-4 pb-4", className)}>
@@ -448,7 +477,7 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
               mentionActive={mentionActive}
               placeholder={noModelsAvailable ? t('noModelPlaceholder') : hasWorkspace ? t('placeholder') + t('placeholderMention') : t('placeholder')}
               className="min-h-[28px] max-h-[200px] py-1"
-              disabled={isGenerating || noModelsAvailable}
+              disabled={isInputDisabled}
             />
 
             {suggestions.length > 0 && (
@@ -489,6 +518,7 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
 
             <button
                 type="button"
+                disabled={isInputDisabled}
                 className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full border border-[var(--border-default)] hover:bg-[var(--surface-tertiary)] transition-colors text-[var(--text-secondary)]"
                 aria-label={t('attachFile')}
                 onClick={handleBrowse}
@@ -496,24 +526,31 @@ export function ChatForm({ isGenerating, onSend, onStop, className, sessionId, d
                 <Plus className="h-4 w-4" />
               </button>
 
-              <WorkspaceToggle sessionId={sessionId} directory={directory} isIndexing={isIndexing} />
+              <div className={cn(isInputDisabled && "pointer-events-none opacity-50")}>
+                <WorkspaceToggle sessionId={sessionId} directory={directory} isIndexing={isIndexing} />
+              </div>
 
-            <AgentToggle />
+            <div className={cn(isInputDisabled && "pointer-events-none opacity-50")}>
+              <AgentToggle />
+            </div>
 
             <div className="flex-1" />
 
+            {compactingStatusText && (
+              <div className="mr-1 max-w-[220px] truncate text-[12px] font-medium text-[var(--text-secondary)]">
+                {compactingStatusText}
+              </div>
+            )}
+
             <ChatActions
-              isGenerating={isGenerating}
-              canSend={(input.trim().length > 0 || attachments.length > 0) && !isIndexing && !noModelsAvailable}
+              isBusy={isGenerating || isCompacting}
+              canSend={(input.trim().length > 0 || attachments.length > 0) && !isIndexing && !isCompacting && !noModelsAvailable}
               onSend={handleSend}
               onStop={onStop}
             />
           </div>
         </div>
 
-        <p className="mt-2.5 text-center text-[11px] text-[var(--text-tertiary)]">
-          {t('inputHint')}
-        </p>
       </div>
     </div>
   );
@@ -541,7 +578,7 @@ function AgentToggle() {
           type="button"
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors bg-[var(--surface-tertiary)] text-[var(--text-primary)] hover:bg-[var(--surface-tertiary)]/80"
         >
-          <span>{active.label}</span>
+          <span>{t("actionModePrefix")}: {active.label}</span>
           <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
         </button>
       </PopoverTrigger>

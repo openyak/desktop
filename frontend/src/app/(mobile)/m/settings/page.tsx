@@ -82,7 +82,7 @@ export default function MobileSettingsPage() {
         }
       })
       .catch(() => {});
-  }, [config]);
+  }, [activeProvider, config]);
 
   const handleProviderSelect = (id: RemoteProvider) => {
     setActiveProvider(id);

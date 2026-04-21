@@ -266,16 +266,41 @@ function MemoryBlock() {
 export function ContextCard() {
   const collapsed = useWorkspaceStore((s) => s.collapsedSections["context"]);
   const toggleSection = useWorkspaceStore((s) => s.toggleSection);
+  const workspacePath = useWorkspaceStore((s) => s.activeWorkspacePath);
 
   return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--surface-secondary)] overflow-hidden">
+    <div className="overflow-hidden rounded-3xl border border-white/8 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset] backdrop-blur-sm">
       <button
-        className="flex items-center justify-between w-full px-4 py-3 text-left transition-colors"
+        className="flex w-full items-start justify-between px-4 py-4 text-left transition-colors hover:bg-white/[0.02]"
         onClick={() => toggleSection("context")}
       >
-        <span className="text-sm font-medium text-[var(--text-primary)]">
-          Context
-        </span>
+        <div className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium text-[var(--text-primary)]">
+            Context
+          </span>
+          <span className="mt-1 block truncate text-[12px] text-[var(--text-tertiary)]">
+            {workspacePath ? "Memory, connectors, and skills" : "Workspace-aware context"}
+          </span>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {workspacePath ? (
+              <>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
+                  Memory
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
+                  Skills
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
+                  Connectors
+                </span>
+              </>
+            ) : (
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-[var(--text-secondary)]">
+                Waiting for workspace
+              </span>
+            )}
+          </div>
+        </div>
         <ChevronDown
           className={cn(
             "h-4 w-4 text-[var(--text-tertiary)] transition-transform duration-200",
@@ -292,7 +317,7 @@ export function ContextCard() {
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="overflow-hidden"
           >
-            <div className="pb-3">
+            <div className="border-t border-white/6 pb-3 pt-2">
               <MemoryBlock />
               <ConnectorsBlock />
               <SkillsSummary />

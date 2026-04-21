@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface OpenYakLogoProps {
   size?: number;
   className?: string;
@@ -5,12 +7,13 @@ interface OpenYakLogoProps {
 
 export function OpenYakLogo({ size = 20, className }: OpenYakLogoProps) {
   return (
-    <img
+    <Image
       src="/favicon.svg"
       width={size}
       height={size}
       alt="OpenYak"
       className={className}
+      unoptimized
     />
   );
 }

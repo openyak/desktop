@@ -292,27 +292,10 @@ class IndexManager:
         if db is None:
             return 0
 
-        # Collect current files on disk
-        disk_files: dict[str, tuple[float, int]] = {}  # path -> (mtime, size)
+        # Collect current files off the event loop. Large workspace walks can
+        # otherwise make the app feel frozen right after folder selection.
+        disk_files = await asyncio.to_thread(_collect_disk_files_sync, workspace)
         ws_path = Path(workspace)
-
-        for dirpath, dirnames, filenames in os.walk(workspace):
-            # Prune skip directories in-place
-            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
-
-            for fname in filenames:
-                ext = os.path.splitext(fname)[1].lower()
-                if ext in _SKIP_EXTENSIONS:
-                    continue
-
-                full_path = os.path.join(dirpath, fname)
-                try:
-                    stat = os.stat(full_path)
-                    # Use forward-slash relative path as key
-                    rel = Path(full_path).relative_to(ws_path).as_posix()
-                    disk_files[rel] = (stat.st_mtime, stat.st_size)
-                except OSError:
-                    continue
 
         # Load existing index state
         indexed_files: dict[str, float] = {}  # path -> mtime
@@ -402,13 +385,7 @@ class IndexManager:
 
         # Text files
         try:
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                # Quick binary check on first chunk
-                head = f.read(8192)
-                if "\x00" in head:
-                    return None  # likely binary
-                rest = f.read()
-                return head + rest
+            return await asyncio.to_thread(_read_text_file_sync, file_path)
         except (OSError, PermissionError):
             return None
 
@@ -439,3 +416,37 @@ def _build_fts_query(query: str) -> str:
     # Quote each token, escaping internal double-quotes
     quoted = ['"' + t.replace('"', '""') + '"' for t in tokens]
     return " ".join(quoted)
+
+
+def _collect_disk_files_sync(workspace: str) -> dict[str, tuple[float, int]]:
+    """Walk a workspace and collect index candidates in a worker thread."""
+    disk_files: dict[str, tuple[float, int]] = {}
+    ws_path = Path(workspace)
+
+    for dirpath, dirnames, filenames in os.walk(workspace):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+
+        for fname in filenames:
+            ext = os.path.splitext(fname)[1].lower()
+            if ext in _SKIP_EXTENSIONS:
+                continue
+
+            full_path = os.path.join(dirpath, fname)
+            try:
+                stat = os.stat(full_path)
+                rel = Path(full_path).relative_to(ws_path).as_posix()
+                disk_files[rel] = (stat.st_mtime, stat.st_size)
+            except OSError:
+                continue
+
+    return disk_files
+
+
+def _read_text_file_sync(file_path: str) -> str | None:
+    """Read a text file with a quick binary guard in a worker thread."""
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        head = f.read(8192)
+        if "\x00" in head:
+            return None
+        rest = f.read()
+        return head + rest

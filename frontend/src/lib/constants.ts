@@ -105,6 +105,7 @@ export const API = {
   CHAT: {
     PROMPT: "/api/chat/prompt",
     EDIT: "/api/chat/edit",
+    COMPACT: "/api/chat/compact",
     STREAM: (streamId: string) => {
       // Remote mode: use tunnel URL instead of localhost
       const rc = getRemoteConfig();
@@ -121,6 +122,7 @@ export const API = {
     SEARCH: (q: string, limit = 20, offset = 0) =>
       `/api/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`,
     DETAIL: (id: string) => `/api/sessions/${id}`,
+    COMPACT: (id: string) => `/api/sessions/${id}/compact`,
     EXPORT_PDF: (id: string) => `/api/sessions/${id}/export-pdf`,
     EXPORT_MD: (id: string) => `/api/sessions/${id}/export-md`,
     TODOS: (id: string) => `/api/sessions/${id}/todos`,

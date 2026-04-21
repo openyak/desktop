@@ -7,13 +7,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSettingsStore, type ActiveProvider } from "@/stores/settings-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useAuthStore, type OpenYakUser } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
 import { proxyApi, ProxyApiError } from "@/lib/proxy-api";
 import { API, IS_DESKTOP, queryKeys } from "@/lib/constants";
 import { desktopAPI } from "@/lib/tauri-api";
+import { useModels } from "@/hooks/use-models";
 import type { ApiKeyStatus, ProviderInfo, LocalProviderStatus } from "@/types/usage";
+import type { ModelInfo } from "@/types/model";
 import { OllamaPanel } from "@/components/settings/ollama-panel";
 
 /** Extract a displayable error message from FastAPI error responses.
@@ -48,11 +50,10 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
   );
 
   const [mounted, setMounted] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const qc = useQueryClient();
+  const { data: allModels } = useModels();
 
-  const [proxyUrlInput, setProxyUrlInput] = useState(
+  const [proxyUrlInput] = useState(
     process.env.NEXT_PUBLIC_DEFAULT_PROXY_URL || "https://api.open-yak.com",
   );
   const [emailInput, setEmailInput] = useState("");
@@ -159,6 +160,37 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
     }
   };
 
+  const pickModelForMode = (mode: ProviderMode, models: ModelInfo[] | undefined) => {
+    if (!models || models.length === 0) return null;
+    if (mode === "byok") {
+      return models.find((m) => !["openyak-proxy", "openai-subscription", "ollama"].includes(m.provider_id)) ?? null;
+    }
+    if (mode === "openyak") {
+      return models.find((m) => m.provider_id === "openyak-proxy") ?? null;
+    }
+    if (mode === "chatgpt") {
+      return models.find((m) => m.provider_id === "openai-subscription") ?? null;
+    }
+    if (mode === "ollama") {
+      return models.find((m) => m.provider_id === "ollama") ?? null;
+    }
+    if (mode === "local") {
+      return models.find((m) => m.provider_id === "local") ?? null;
+    }
+    if (mode === "custom") {
+      return models.find((m) => m.provider_id?.startsWith("custom_")) ?? null;
+    }
+    return null;
+  };
+
+  const activateProviderMode = (mode: ProviderMode) => {
+    setActiveProvider(mode);
+    const picked = pickModelForMode(mode, allModels);
+    if (picked) {
+      useSettingsStore.getState().setSelectedModel(picked.id, picked.provider_id);
+    }
+  };
+
   const { data: openaiSubStatus, refetch: refetchOpenaiSub } = useQuery({
     queryKey: queryKeys.openaiSubscription,
     queryFn: () => api.get<OpenAISubscriptionStatus>(API.CONFIG.OPENAI_SUBSCRIPTION),
@@ -173,24 +205,6 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       if (activeProvider === "openyak") {
         if (openaiSubStatus?.is_connected) setActiveProvider("chatgpt");
         else if (keyStatus?.is_configured) setActiveProvider("byok");
-        else setActiveProvider(null);
-      }
-    },
-  });
-
-  const updateKey = useMutation({
-    mutationFn: (apiKey: string) => api.post<ApiKeyStatus>(API.CONFIG.API_KEY, { api_key: apiKey }),
-    onSuccess: () => { setActiveProvider("byok"); qc.invalidateQueries({ queryKey: queryKeys.openyakAccount }); qc.invalidateQueries({ queryKey: queryKeys.models }); setApiKeyInput(""); },
-  });
-
-  const deleteKey = useMutation({
-    mutationFn: () => api.delete<ApiKeyStatus>(API.CONFIG.API_KEY),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.apiKeyStatus });
-      qc.invalidateQueries({ queryKey: queryKeys.models });
-      if (activeProvider === "byok") {
-        if (authStore.isConnected) setActiveProvider("openyak");
-        else if (openaiSubStatus?.is_connected) setActiveProvider("chatgpt");
         else setActiveProvider(null);
       }
     },
@@ -213,7 +227,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       setProviderKeyInputs((prev) => ({ ...prev, [id]: "" }));
       setProviderError((prev) => { const next = { ...prev }; delete next[id]; return next; });
       setProviderMutatingId(null);
-      setActiveProvider("byok");
+      activateProviderMode("byok");
       qc.invalidateQueries({ queryKey: queryKeys.providers });
       qc.invalidateQueries({ queryKey: queryKeys.models });
     },
@@ -396,7 +410,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
         ]).map(({ mode, label, icon: Icon, connected }) => (
           <button
             key={mode}
-            onClick={() => { setViewingProvider(mode); if (connected) setActiveProvider(mode); }}
+            onClick={() => { setViewingProvider(mode); if (connected) activateProviderMode(mode); }}
             className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors relative ${
               viewingProvider === mode
                 ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/5"

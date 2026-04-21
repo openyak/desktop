@@ -3,7 +3,7 @@
 import { ChatView } from "@/components/chat/chat-view";
 import { useActiveSessionId } from "@/hooks/use-active-session-id";
 
-export function SessionPageClient(_props: { sessionId: string }) {
+export function SessionPageClient() {
   const resolvedSessionId = useActiveSessionId();
 
   if (!resolvedSessionId) return null;

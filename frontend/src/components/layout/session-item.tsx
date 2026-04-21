@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useTranslation } from 'react-i18next';
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Trash2, Pencil, FileDown, FileText, FolderOpen, Pin, PinOff, MessageCircle, EllipsisVertical } from "lucide-react";
+import { Trash2, Pencil, FileDown, FileText, Pin, PinOff, MessageCircle, EllipsisVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
@@ -40,6 +40,8 @@ interface SessionItemProps {
   onEditEnd?: () => void;
   snippet?: string;
   isFocused?: boolean;
+  /** Extra left indent, used when the row sits under a project group header */
+  indent?: boolean;
 }
 
 export const SessionItem = memo(function SessionItem({
@@ -55,6 +57,7 @@ export const SessionItem = memo(function SessionItem({
   onEditEnd,
   snippet,
   isFocused = false,
+  indent = false,
 }: SessionItemProps) {
   const { t } = useTranslation('common');
   const router = useRouter();
@@ -71,6 +74,8 @@ export const SessionItem = memo(function SessionItem({
   const title = rawTitle.startsWith("Channel: ")
     ? rawTitle.slice(9).replace(/^(whatsapp|discord|telegram|slack|feishu|signal|line|imessage):/, "")
     : rawTitle;
+  const relativeTime = getRelativeTimeLabel(session.time_updated, t);
+  const channelBadge = session.slug ? getChannelBadge(session.slug) : null;
 
   // Focus the item when it receives roving tabindex focus
   useEffect(() => {
@@ -158,52 +163,48 @@ export const SessionItem = memo(function SessionItem({
             cancel();
           }}
           className={cn(
-            "group relative flex items-center overflow-hidden rounded-xl px-3 py-3 mx-2 text-[13px] cursor-pointer transition-all duration-150 ease-out",
+            "group relative mx-3 flex cursor-pointer items-center gap-2 overflow-hidden rounded-lg text-[13px] transition-colors duration-150 ease-out",
+            indent ? "pl-9 pr-2" : "px-3",
+            snippet ? "py-1.5" : "py-1",
             isActive
-              ? "bg-[var(--sidebar-active)] text-[var(--text-primary)] shadow-[var(--sidebar-active-shadow)] ring-1 ring-[var(--sidebar-active-border)]"
-              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-[0.98]",
+              ? "bg-[var(--sidebar-active)] text-[var(--text-primary)] shadow-[var(--sidebar-active-shadow)]"
+              : "text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]",
             isEditing && "ring-1 ring-[var(--brand-primary)]",
           )}
         >
           <div className="flex-1 min-w-0">
             {isEditing ? (
-              <div className="flex items-center gap-1">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onBlur={handleSubmitRename}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full bg-transparent text-sm text-[var(--text-primary)] outline-none border-b border-[var(--brand-primary)] py-0.5"
-                />
-              </div>
+              <input
+                ref={inputRef}
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSubmitRename}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full border-b border-[var(--brand-primary)] bg-transparent py-0.5 text-[13px] text-[var(--text-primary)] outline-none"
+              />
             ) : (
               <>
                 <p
                   ref={titleRef}
-                  className="whitespace-nowrap overflow-hidden pr-2"
+                  className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap text-[13px] leading-5"
                   style={scrollVars}
                 >
-                  <span className={scrollVars ? "inline-block group-hover:animate-scroll-text" : ""}>
+                  {channelBadge && (
+                    <MessageCircle className={cn("inline h-3 w-3 shrink-0", channelBadge.color)} />
+                  )}
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 overflow-hidden text-ellipsis",
+                      scrollVars ? "inline-block group-hover:animate-scroll-text" : "",
+                    )}
+                  >
                     {title}
                   </span>
                 </p>
-                {session.slug && getChannelBadge(session.slug) && !snippet && (
-                  <p className="truncate pr-2 text-[11px] mt-0.5 flex items-center gap-1">
-                    <MessageCircle className={cn("inline h-3 w-3 shrink-0", getChannelBadge(session.slug)!.color)} />
-                    <span className="text-[var(--text-tertiary)]">{getChannelBadge(session.slug)!.label}</span>
-                  </p>
-                )}
-                {session.directory && session.directory !== "." && !snippet && !session.slug && (
-                  <p className="truncate pr-2 text-[11px] text-[var(--text-tertiary)] mt-0.5 flex items-center gap-1">
-                    <FolderOpen className="inline h-3 w-3 shrink-0" />
-                    {session.directory.replace(/\\/g, "/").replace(/\/$/, "").split("/").pop()}
-                  </p>
-                )}
                 {snippet && (
-                  <p className="truncate pr-2 text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                  <p className="mt-0.5 truncate text-[11px] leading-4 text-[var(--text-tertiary)]">
                     …{snippet}…
                   </p>
                 )}
@@ -211,13 +212,20 @@ export const SessionItem = memo(function SessionItem({
             )}
           </div>
 
-          {/* Three-dot menu button — visible on hover or when active */}
+          {/* Right-side slot: relative time (fades out on hover), three-dot menu (fades in) */}
           {!isEditing && (
+            <>
+              <span
+                aria-hidden
+                className="ml-auto shrink-0 text-[11px] text-[var(--text-tertiary)] opacity-100 transition-opacity group-hover:opacity-0"
+              >
+                {relativeTime}
+              </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-[var(--surface-tertiary)] transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-tertiary)] opacity-0 transition-opacity hover:bg-[var(--surface-tertiary)] hover:text-[var(--text-primary)] focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                 >
                   <EllipsisVertical className="h-3.5 w-3.5" />
                 </button>
@@ -252,6 +260,7 @@ export const SessionItem = memo(function SessionItem({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </>
           )}
         </div>
       </ContextMenuTrigger>
@@ -287,6 +296,27 @@ export const SessionItem = memo(function SessionItem({
     </ContextMenu>
   );
 });
+
+function getRelativeTimeLabel(date: string, t: (key: string, options?: Record<string, unknown>) => string) {
+  const now = new Date();
+  const d = new Date(date);
+  const diff = now.getTime() - d.getTime();
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return t("justNow");
+  if (minutes < 60) return t("minutesAgo", { count: minutes });
+  if (hours < 24) return t("hoursAgo", { count: hours });
+  if (days < 7) return t("daysAgo", { count: days });
+
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
 
 /** Map session slug prefix to a channel badge. */
 function getChannelBadge(slug: string): { label: string; color: string } | null {

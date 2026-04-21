@@ -34,6 +34,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     respondToQuestion,
     respondToPlanReview,
     isGenerating,
+    isCompacting,
     streamId,
     pendingUserText,
     pendingAttachments,
@@ -100,6 +101,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
     ).then((res) => {
       if (res.todos && res.todos.length > 0) {
         useWorkspaceStore.getState().setTodos(res.todos as WorkspaceTodo[]);
+        useWorkspaceStore.getState().open();
       }
     }).catch(() => {
       // Non-critical — todos may not exist yet
@@ -112,6 +114,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
         useWorkspaceStore.getState().setWorkspaceFiles(
           res.files.map((f) => ({ name: f.name, path: f.path, type: f.type as WorkspaceFile["type"] })),
         );
+        useWorkspaceStore.getState().open();
       }
     }).catch(() => {
       // Non-critical — files may not exist yet
@@ -129,7 +132,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
       queueMicrotask(() => {
         if (sessionMountedRef.current) return; // StrictMode remount — skip abort
         const state = useChatStore.getState();
-        if (state.isGenerating && state.sessionId === capturedSessionId) {
+        if ((state.isGenerating || state.isCompacting) && state.sessionId === capturedSessionId) {
           capturedStopRef();
         }
       });
@@ -216,6 +219,7 @@ export function ChatView({ sessionId }: ChatViewProps) {
       ) : (
         <ChatForm
           isGenerating={isGenerating}
+          isCompacting={isCompacting || !!session?.time_compacting}
           onSend={sendMessage}
           onStop={stopGeneration}
           sessionId={sessionId}

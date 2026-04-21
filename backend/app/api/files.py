@@ -406,15 +406,29 @@ class FileContentRequest(BaseModel):
     workspace: str | None = None  # Resolve relative paths against this directory
 
 
+def _resolve_requested_file_path(path: str, workspace: str | None = None) -> Path:
+    """Resolve a requested file path for preview/open operations.
+
+    Relative paths are resolved against the active workspace when present.
+    In unrestricted sessions, they fall back to the backend process cwd so
+    references like ``backend/app/main.py`` remain openable.
+    """
+    file_path = Path(path)
+    if file_path.is_absolute():
+        return file_path
+
+    if workspace:
+        return (Path(workspace) / file_path).resolve()
+
+    return (Path.cwd() / file_path).resolve()
+
+
 @router.post("/files/content")
 async def get_file_content(body: FileContentRequest) -> dict[str, Any]:
     """Read a file from disk and return its content for artifact preview."""
     from fastapi import HTTPException
 
-    file_path = Path(body.path)
-    # Resolve relative paths against workspace directory
-    if not file_path.is_absolute() and body.workspace:
-        file_path = Path(body.workspace) / file_path
+    file_path = _resolve_requested_file_path(body.path, body.workspace)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {body.path}")
     if not file_path.is_file():
@@ -444,9 +458,7 @@ async def get_file_content_binary(body: FileContentRequest) -> dict[str, Any]:
     """
     from fastapi import HTTPException
 
-    file_path = Path(body.path)
-    if not file_path.is_absolute() and body.workspace:
-        file_path = Path(body.workspace) / file_path
+    file_path = _resolve_requested_file_path(body.path, body.workspace)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {body.path}")
     if not file_path.is_file():
@@ -473,7 +485,7 @@ async def open_with_system(body: FileContentRequest) -> dict[str, str]:
     """Open a file with the OS default application."""
     from fastapi import HTTPException
 
-    file_path = Path(body.path)
+    file_path = _resolve_requested_file_path(body.path, body.workspace)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {body.path}")
 

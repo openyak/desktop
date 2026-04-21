@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.pdf import markdown_to_pdf
-from app.dependencies import get_db
+from app.dependencies import AgentRegistryDep, ProviderRegistryDep, SessionFactoryDep, StreamManagerDep, get_db
 from app.models.session import Session
+from app.models.session_file import SessionFile
 from app.schemas.session import SessionCreate, SessionResponse, SessionSearchResult, SessionUpdate
+from app.session.compaction import run_compaction
 from app.session.manager import (
     create_session,
     delete_session_uploads,
@@ -23,10 +29,28 @@ from app.session.manager import (
     update_session_title,
 )
 from app.storage.repository import delete_by_id
+from app.streaming.manager import GenerationJob
+from app.utils.id import generate_ulid
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+_PATH_PATTERN = re.compile(r"(/[^\s`]+?\.[A-Za-z0-9]{1,10})")
+_CREATION_HINT_PATTERN = re.compile(
+    r"\b(created?|written|saved|generated|exported|output)\b",
+    re.IGNORECASE,
+)
+_CREATED_IN_PATTERN = re.compile(
+    r"created in\s+([^\s`]+)",
+    re.IGNORECASE,
+)
+_BULLET_FILENAME_PATTERN = re.compile(
+    r"^\s*[-*•]\s+([A-Za-z0-9_\- .]+\.[A-Za-z0-9]{1,10})\s*$"
+)
+
+
+class SessionCompactionRequest(BaseModel):
+    model_id: str | None = None
 
 
 def _trigger_index(request: Request, directory: str | None, session_id: str | None = None) -> None:
@@ -41,6 +65,71 @@ def _trigger_index(request: Request, directory: str | None, session_id: str | No
         manager.ensure_index(directory, session_id),
         name=f"fts-trigger-{session_id[:12]}",
     )
+
+
+def _extract_file_paths_from_messages(messages: list, session_directory: str | None) -> list[str]:
+    """Best-effort recovery of files that were created during older sessions.
+
+    This is intentionally conservative: it should recover explicit creation
+    outputs from older code_execute-style sessions, but it must not treat files
+    merely *read* during analysis as generated workspace files.
+    """
+    if not session_directory:
+        return []
+
+    base_dir = str(Path(session_directory).resolve())
+    found: list[str] = []
+    seen: set[str] = set()
+
+    for msg in messages:
+        for part in getattr(msg, "parts", []):
+            data = getattr(part, "data", {}) or {}
+            payload = ""
+
+            if data.get("type") == "tool":
+                tool_name = str(data.get("tool", ""))
+                if tool_name not in {"code_execute", "write", "edit", "artifact", "bash"}:
+                    continue
+                state = data.get("state") or {}
+                payload = str(state.get("output", ""))
+            elif data.get("type") == "text":
+                payload = str(data.get("text", ""))
+                if not _CREATION_HINT_PATTERN.search(payload):
+                    continue
+            else:
+                continue
+
+            # Case 1: direct absolute paths in explicit creation/writing context.
+            for raw_match in _PATH_PATTERN.findall(payload):
+                candidate = str(Path(raw_match).resolve())
+                if not Path(candidate).is_file():
+                    continue
+                if not candidate.startswith(base_dir):
+                    continue
+                if candidate in seen:
+                    continue
+                seen.add(candidate)
+                found.append(candidate)
+
+            # Case 2: assistant summaries like:
+            # "Created in /path/to/dir:" + bullet list of filenames
+            created_in_match = _CREATED_IN_PATTERN.search(payload)
+            if created_in_match:
+                target_dir = str(Path(created_in_match.group(1)).resolve())
+                if target_dir.startswith(base_dir) and Path(target_dir).is_dir():
+                    for line in payload.splitlines():
+                        bullet_match = _BULLET_FILENAME_PATTERN.match(line)
+                        if not bullet_match:
+                            continue
+                        candidate = str((Path(target_dir) / bullet_match.group(1)).resolve())
+                        if not Path(candidate).is_file():
+                            continue
+                        if candidate in seen:
+                            continue
+                        seen.add(candidate)
+                        found.append(candidate)
+
+    return found
 
 
 @router.get("/sessions", response_model=list[SessionResponse])
@@ -153,27 +242,128 @@ async def get_session_files(
     session_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Get workspace files for a session by scanning openyak_written/ directory."""
-    import os
-    from pathlib import Path
+    """Get tracked workspace files for a session."""
 
     session = await get_session(db, session_id)
     if session is None or not session.directory:
         return {"files": []}
 
-    output_dir = Path(session.directory).resolve() / "openyak_written"
-    if not output_dir.is_dir():
-        return {"files": []}
+    tracked = await db.execute(
+        select(SessionFile)
+        .where(SessionFile.session_id == session_id)
+        .order_by(SessionFile.time_created.asc())
+    )
+    tracked_files = tracked.scalars().all()
+    files: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
 
-    files = []
-    for entry in sorted(output_dir.iterdir(), key=lambda e: e.stat().st_mtime):
-        if entry.is_file():
+    for entry in tracked_files:
+        resolved = str(Path(entry.file_path).resolve())
+        if resolved in seen_paths or not Path(resolved).is_file():
+            continue
+        seen_paths.add(resolved)
+        files.append({
+            "name": entry.file_name,
+            "path": resolved,
+            "type": entry.file_type,
+            "tool": entry.tool_id,
+        })
+
+    # Backward-compatible fallback for older sessions that were never tracked.
+    output_dir = Path(session.directory).resolve() / "openyak_written"
+    if output_dir.is_dir():
+        for entry in sorted(output_dir.iterdir(), key=lambda e: e.stat().st_mtime):
+            resolved = str(entry.resolve())
+            if not entry.is_file() or resolved in seen_paths:
+                continue
+            seen_paths.add(resolved)
             files.append({
                 "name": entry.name,
-                "path": str(entry),
+                "path": resolved,
                 "type": "generated",
+                "tool": "artifact",
             })
+
+    # Legacy fallback for older code_execute-created files: recover paths from
+    # persisted tool outputs and assistant text when SessionFile tracking did
+    # not yet record them.
+    if not files:
+        messages = await get_messages(db, session_id, limit=500, offset=0)
+        recovered_paths = _extract_file_paths_from_messages(messages, session.directory)
+        for resolved in recovered_paths:
+            if resolved in seen_paths:
+                continue
+            seen_paths.add(resolved)
+            files.append({
+                "name": Path(resolved).name,
+                "path": resolved,
+                "type": "generated",
+                "tool": "code_execute",
+            })
+
     return {"files": files}
+
+
+@router.post("/sessions/{session_id}/compact")
+async def compact_session_endpoint(
+    session_id: str,
+    session_factory: SessionFactoryDep,
+    provider_registry: ProviderRegistryDep,
+    agent_registry: AgentRegistryDep,
+    stream_manager: StreamManagerDep,
+    db: AsyncSession = Depends(get_db),
+    body: SessionCompactionRequest | None = None,
+) -> dict[str, object]:
+    """Trigger manual context compaction for a session."""
+    
+    session = await get_session(db, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if stream_manager and any(job.session_id == session_id and not job.completed for job in stream_manager._jobs.values()):
+        raise HTTPException(status_code=409, detail="Session is currently generating")
+
+    job = GenerationJob(stream_id=f"manual-compact-{generate_ulid()}", session_id=session_id)
+    result_payload: dict[str, object] = {"ok": False}
+
+    async def _run() -> None:
+        nonlocal result_payload
+        async with session_factory() as s:
+            async with s.begin():
+                live = await get_session(s, session_id)
+                if live is not None:
+                    live.time_compacting = datetime.now(timezone.utc)
+
+        try:
+            result = await run_compaction(
+                session_id,
+                job=job,
+                session_factory=session_factory,
+                provider_registry=provider_registry,
+                agent_registry=agent_registry,
+                model_id=body.model_id if body else None,
+                visible_summary=True,
+            )
+            if not result.summary and result.pruned_parts == 0:
+                raise HTTPException(status_code=409, detail="Nothing to compact yet")
+            if not result.summary:
+                raise HTTPException(status_code=502, detail="Compaction pruned context but did not produce an AI summary")
+            result_payload = {
+                "ok": True,
+                "summary_created": True,
+                "pruned_parts": result.pruned_parts,
+                "visible_summary": True,
+            }
+        finally:
+            async with session_factory() as s:
+                async with s.begin():
+                    live = await get_session(s, session_id)
+                    if live is not None:
+                        live.time_compacting = None
+            job.complete()
+
+    await _run()
+    return result_payload
 
 
 @router.delete("/sessions/{session_id}")

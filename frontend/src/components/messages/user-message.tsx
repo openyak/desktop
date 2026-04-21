@@ -244,7 +244,7 @@ export function UserMessage({ message, isNew = true, onEditAndResend, isGenerati
                 handleCancel();
               }
             }}
-            className="w-full resize-none bg-transparent text-[15px] text-[var(--text-primary)] leading-relaxed outline-none"
+            className="w-full resize-none bg-transparent text-[13px] text-[var(--text-primary)] leading-relaxed outline-none"
             rows={1}
           />
           {(editAttachments.length > 0 || uploading) && (
@@ -323,7 +323,7 @@ export function UserMessage({ message, isNew = true, onEditAndResend, isGenerati
     >
       <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl bg-[var(--user-bubble-bg)] px-4 py-2.5 shadow-[var(--shadow-sm)] border border-[var(--border-default)]">
         {text && (
-          <div className="text-[15px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
+          <div className="text-[13px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
             {text}
           </div>
         )}

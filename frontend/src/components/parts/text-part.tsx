@@ -9,10 +9,17 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { API } from "@/lib/constants";
 import { useArtifactStore } from "@/stores/artifact-store";
-import { classifyCodeBlock, isPreviewableFile, artifactTypeFromExtension, languageFromExtension, looksLikeFilePath } from "@/lib/artifacts";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import {
+  classifyCodeBlock,
+  isPreviewableFile,
+  artifactTypeFromExtension,
+  languageFromExtension,
+  looksLikeFilePath,
+  isAbsoluteFilePath,
+} from "@/lib/artifacts";
 import type { TextPart as TextPartType } from "@/types/message";
 import type { Source } from "@/lib/sources";
-import type { ArtifactType } from "@/types/artifact";
 import { MermaidBlock } from "./mermaid-block";
 
 interface TextPartProps {
@@ -61,8 +68,9 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
   const lang = match?.[1] ?? "";
-  const code = String(children).replace(/\n$/, "");
+  const code = extractText(children).replace(/\n$/, "");
   const openArtifact = useArtifactStore((s) => s.openArtifact);
+  const workspaceFiles = useWorkspaceStore((s) => s.workspaceFiles);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
@@ -88,15 +96,23 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
     // Check if inline code looks like a file path
     const text = String(children).trim();
     const isFilePath = looksLikeFilePath(text);
+    const fileName = text.split(/[\\/]/).pop() || text;
+    const directoryHint = text.includes("/")
+      ? text.slice(0, Math.max(0, text.lastIndexOf("/")))
+      : text.includes("\\")
+        ? text.slice(0, Math.max(0, text.lastIndexOf("\\")))
+        : "";
 
     if (isFilePath) {
-      const hasFullPath = /[/\\]/.test(text);
+      const hasPathSegments = /[/\\]/.test(text);
+      const isAbsolutePath = isAbsoluteFilePath(text);
       const canPreview = isPreviewableFile(text);
 
-      // Full path + previewable → clickable with artifact preview
-      if (hasFullPath && canPreview) {
+      // Path-like reference + previewable → clickable with artifact preview.
+      // Relative paths are allowed here because the backend preview endpoint
+      // can resolve them against the active workspace or backend cwd.
+      if (hasPathSegments && canPreview) {
         const artifacts = useArtifactStore.getState().artifacts;
-        const fileName = text.split(/[\\/]/).pop() || text;
         const existing = artifacts.find(
           (a) => a.filePath?.endsWith(fileName) || a.title === fileName,
         );
@@ -121,17 +137,26 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
           <button
             type="button"
             onClick={handleOpen}
-            className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)] hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] transition-colors cursor-pointer"
-            title="Open file preview"
+            className="inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2.5 py-1.5 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
+            title={text}
           >
-            <FileText className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
-            <span>{children}</span>
+            <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+            <span className="min-w-0">
+              <span className="block truncate text-[0.9em] font-medium text-[var(--text-primary)]">
+                {fileName}
+              </span>
+              {directoryHint && (
+                <span className="block truncate text-[0.72em] text-[var(--text-tertiary)]">
+                  {directoryHint}
+                </span>
+              )}
+            </span>
           </button>
         );
       }
 
-      // Full path + non-previewable → clickable with system open
-      if (hasFullPath) {
+      // Absolute non-previewable paths can still be opened with the OS.
+      if (isAbsolutePath) {
         const handleSystemOpen = () => {
           api.post(API.FILES.OPEN_SYSTEM, { path: text }).catch(() => {});
         };
@@ -140,16 +165,57 @@ function CodeBlock({ className, children, ...props }: React.HTMLAttributes<HTMLE
           <button
             type="button"
             onClick={handleSystemOpen}
-            className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)] hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] transition-colors cursor-pointer"
-            title="Open with system application"
+            className="inline-flex max-w-full items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2.5 py-1.5 align-middle text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
+            title={text}
           >
-            <ExternalLink className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
-            <span>{children}</span>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+            <span className="min-w-0">
+              <span className="block truncate text-[0.9em] font-medium text-[var(--text-primary)]">
+                {fileName}
+              </span>
+              {directoryHint && (
+                <span className="block truncate text-[0.72em] text-[var(--text-tertiary)]">
+                  {directoryHint}
+                </span>
+              )}
+            </span>
           </button>
         );
       }
 
-      // Bare filename (no path separator) → styled with file icon, not clickable
+      // Bare filename (no path separator) → clickable when we can uniquely
+      // match it to a tracked session file; otherwise keep it as a passive badge.
+      const matchingFiles = workspaceFiles.filter((file) => file.name === text);
+      if (matchingFiles.length === 1 && isPreviewableFile(matchingFiles[0].path)) {
+        const matchedFile = matchingFiles[0];
+        const handleOpenTrackedFile = () => {
+          const type = artifactTypeFromExtension(matchedFile.path) || "code";
+          openArtifact({
+            id: `tracked-file-preview-${matchedFile.path}`,
+            title: matchedFile.name,
+            type:
+              type === "react" || type === "html" || type === "svg" || type === "mermaid" || type === "markdown"
+                ? type
+                : "file-preview",
+            content: "",
+            language: languageFromExtension(matchedFile.path),
+            filePath: matchedFile.path,
+          });
+        };
+
+        return (
+          <button
+            type="button"
+            onClick={handleOpenTrackedFile}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-2 py-1 text-[0.85em] font-mono text-left transition-colors hover:bg-[var(--surface-secondary)] hover:border-[var(--border-hover)] cursor-pointer"
+            title="Open file preview"
+          >
+            <FileText className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />
+            <span className="truncate max-w-[16rem]">{children}</span>
+          </button>
+        );
+      }
+
       return (
         <span className="inline-flex items-center gap-1 rounded-md bg-[var(--surface-tertiary)] px-1.5 py-0.5 text-[0.85em] font-mono border border-[var(--border-default)]">
           <FileText className="h-3 w-3 text-[var(--text-tertiary)] shrink-0" />

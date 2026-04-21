@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import type { CompactionPart as CompactionPartType, PartData, ToolPart, StepStartPart, StepFinishPart } from "@/types/message";
+import type { PartData, ToolPart, StepStartPart, StepFinishPart } from "@/types/message";
 import { TextPart } from "@/components/parts/text-part";
 import { ReasoningPart } from "@/components/parts/reasoning-part";
-import { CompactionPart } from "@/components/parts/compaction-part";
 import { SubtaskPart } from "@/components/parts/subtask-part";
 import { ArtifactCard } from "@/components/parts/artifact-card";
 import { PlanFileCard } from "@/components/parts/plan-file-card";
@@ -85,10 +84,6 @@ export function MessageContent({ parts, isStreaming }: MessageContentProps) {
   }, [hasActivity, isStreaming, reasoningTexts, toolParts]);
 
   // Track whether the thinking section is still active (reasoning or tools running)
-  const lastPartIsReasoning = parts.length > 0 && parts[parts.length - 1].type === "reasoning";
-  const hasRunningTool = toolParts.some((t) => t.state.status === "running");
-  const thinkingIsActive = lastPartIsReasoning || hasRunningTool;
-
   // Build ordered chain from parts (preserves interleaving of reasoning + tools)
   const chain = useMemo<ChainItem[]>(() => {
     const items: ChainItem[] = [];
@@ -103,17 +98,27 @@ export function MessageContent({ parts, isStreaming }: MessageContentProps) {
   const activityData = useMemo<ActivityData | null>(
     () =>
       hasActivity
-        ? { reasoningTexts, toolParts, thinkingDuration, stepParts, chain }
+        ? {
+            reasoningTexts,
+            toolParts,
+            thinkingDuration,
+            stepParts,
+            hasVisibleOutput: parts.some((p) =>
+              p.type === "text" || p.type === "file" || p.type === "compaction" || p.type === "subtask",
+            ),
+            chain,
+          }
         : null,
-    [hasActivity, reasoningTexts, toolParts, thinkingDuration, stepParts, chain],
+    [hasActivity, reasoningTexts, toolParts, thinkingDuration, stepParts, chain, parts],
   );
 
-  // Content parts: text, compaction, subtask, and artifact tool calls (shown as inline cards)
+  // Content parts: text, subtask, and artifact tool calls (shown as inline cards)
   // Exclude error-status artifact calls (e.g. failed update attempts) — they have no content to display
   const contentParts = useMemo(
     () =>
       parts.filter(
         (p) =>
+          p.type !== "compaction" &&
           p.type !== "reasoning" &&
           p.type !== "step-start" &&
           p.type !== "step-finish" &&
@@ -155,8 +160,8 @@ export function MessageContent({ parts, isStreaming }: MessageContentProps) {
       {/* Todo progress — visible only while streaming, folds into activity summary when done */}
       {isStreaming && latestTodos.length > 0 && <TodoProgress todos={latestTodos} />}
 
-      {/* Content parts (text, compaction, subtask) */}
-      {contentParts.map((part, i) => {
+      {/* Content parts (text, subtask, artifacts) */}
+      {contentParts.map((part) => {
         const originalIndex = parts.indexOf(part);
         switch (part.type) {
           case "text":
@@ -168,8 +173,6 @@ export function MessageContent({ parts, isStreaming }: MessageContentProps) {
                 sources={sources}
               />
             );
-          case "compaction":
-            return <CompactionPart key={originalIndex} data={part as CompactionPartType} />;
           case "subtask":
             return <SubtaskPart key={originalIndex} data={part} />;
           case "tool": {

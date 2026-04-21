@@ -10,6 +10,7 @@ interface ChatStore {
   streamId: string | null;
   sessionId: string | null;
   isGenerating: boolean;
+  isCompacting: boolean;
 
   // ─── Optimistic user message ───
   /** Text shown as a pending user bubble before the API confirms creation. */
@@ -37,6 +38,7 @@ interface ChatStore {
   /** Immediately show loading state + optimistic user message before API returns. */
   beginSending: (text: string, attachments?: FileAttachment[]) => void;
   startGeneration: (streamId: string, sessionId: string) => void;
+  startCompactionStream: (streamId: string, sessionId: string) => void;
   appendTextDelta: (text: string) => void;
   appendReasoningDelta: (text: string) => void;
   addToolStart: (tool: string, callId: string, args: Record<string, unknown>, title?: string | null) => void;
@@ -56,6 +58,7 @@ interface ChatStore {
   setPlanReview: (req: PlanReviewRequest) => void;
   clearPlanReview: () => void;
   setModelLoading: (loading: boolean) => void;
+  setCompacting: (compacting: boolean) => void;
   clearStreamingContent: () => void;
   finishGeneration: () => void;
   reset: () => void;
@@ -85,6 +88,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   streamId: null,
   sessionId: null,
   isGenerating: false,
+  isCompacting: false,
   pendingUserText: null,
   pendingAttachments: null,
   streamingParts: [],
@@ -99,6 +103,7 @@ export const useChatStore = create<ChatStore>((set) => ({
   beginSending: (text, attachments) =>
     set({
       isGenerating: true,
+      isCompacting: false,
       isModelLoading: false,
       pendingUserText: text,
       pendingAttachments: attachments?.length ? attachments : null,
@@ -116,6 +121,7 @@ export const useChatStore = create<ChatStore>((set) => ({
       streamId,
       sessionId,
       isGenerating: true,
+      isCompacting: false,
       // Keep pendingUserText visible during streaming — it will be cleared
       // in finishGeneration() when the DONE refetch brings the real DB message.
       streamingParts: [],
@@ -126,6 +132,30 @@ export const useChatStore = create<ChatStore>((set) => ({
       pendingPlanReview: null,
     });
   },
+
+  startCompactionStream: (streamId, sessionId) =>
+    set((s) => {
+      const { parts, text, reasoning } = flushBuffers(
+        s.streamingParts,
+        s.streamingText,
+        s.streamingReasoning,
+      );
+      return {
+        streamId,
+        sessionId,
+        isGenerating: false,
+        isCompacting: true,
+        isModelLoading: false,
+        pendingUserText: null,
+        pendingAttachments: null,
+        streamingParts: parts,
+        streamingText: text,
+        streamingReasoning: reasoning,
+        pendingPermission: null,
+        pendingQuestion: null,
+        pendingPlanReview: null,
+      };
+    }),
 
   appendTextDelta: (text) =>
     set((s) => ({ streamingText: s.streamingText + text })),
@@ -284,6 +314,7 @@ export const useChatStore = create<ChatStore>((set) => ({
         })),
       };
       return {
+        isCompacting: true,
         streamingParts: [...parts, compactionPart],
         streamingText: text,
         streamingReasoning: reasoning,
@@ -343,6 +374,8 @@ export const useChatStore = create<ChatStore>((set) => ({
 
   setModelLoading: (loading) => set({ isModelLoading: loading }),
 
+  setCompacting: (compacting) => set({ isCompacting: compacting }),
+
   clearStreamingContent: () =>
     set({
       streamingParts: [],
@@ -360,6 +393,7 @@ export const useChatStore = create<ChatStore>((set) => ({
       return {
         streamId: null,
         isGenerating: false,
+        isCompacting: false,
         isModelLoading: false,
         pendingUserText: null,
         pendingAttachments: null,
@@ -377,6 +411,7 @@ export const useChatStore = create<ChatStore>((set) => ({
       streamId: null,
       sessionId: null,
       isGenerating: false,
+      isCompacting: false,
       isModelLoading: false,
       pendingUserText: null,
       pendingAttachments: null,

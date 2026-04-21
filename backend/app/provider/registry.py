@@ -6,12 +6,22 @@ import logging
 
 from app.provider.base import BaseProvider
 from app.schemas.provider import ModelInfo, ProviderStatus
+from app.session.utils import compute_effective_context_window
 
 logger = logging.getLogger(__name__)
 
 # Aggregator providers — their models should yield to direct providers
 # when no explicit provider_id is given.
-_AGGREGATOR_PROVIDERS = {"openrouter"}
+_AGGREGATOR_PROVIDERS = {"openrouter", "openyak-proxy"}
+
+
+def _provider_priority(provider_id: str) -> int:
+    """Lower is better when deduplicating model IDs across providers."""
+    if provider_id == "openyak-proxy":
+        return 2
+    if provider_id in _AGGREGATOR_PROVIDERS:
+        return 1
+    return 0
 
 
 class ProviderRegistry:
@@ -59,15 +69,24 @@ class ProviderRegistry:
                 models = await provider.list_models()
                 result[pid] = models
                 for m in models:
+                    metadata = dict(m.metadata or {})
+                    effective = compute_effective_context_window(
+                        m.capabilities.max_context,
+                        metadata.get("effective_context_window"),
+                    )
+                    if effective is not None:
+                        metadata["effective_context_window"] = effective
+                        m.metadata = metadata
+
                     # Full list keeps everything (including duplicates)
                     new_full.append((provider, m))
 
                     # Quick index: direct providers win over aggregators
                     existing = new_index.get(m.id)
                     if existing is not None:
-                        existing_is_aggregator = existing[0].id in _AGGREGATOR_PROVIDERS
-                        new_is_aggregator = pid in _AGGREGATOR_PROVIDERS
-                        if existing_is_aggregator and not new_is_aggregator:
+                        existing_priority = _provider_priority(existing[0].id)
+                        new_priority = _provider_priority(pid)
+                        if new_priority < existing_priority:
                             new_index[m.id] = (provider, m)
                     else:
                         new_index[m.id] = (provider, m)

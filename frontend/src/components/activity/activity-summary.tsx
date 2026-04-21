@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Wrench } from "lucide-react";
+import { CheckCircle2, ChevronRight, Wrench } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { useActivityStore, type ActivityData } from "@/stores/activity-store";
@@ -15,11 +15,22 @@ export function ActivitySummary({ data }: ActivitySummaryProps) {
 
   const hasReasoning = data.reasoningTexts.length > 0;
   const hasTools = data.toolParts.length > 0;
+  const lastStepFinish = [...data.stepParts]
+    .reverse()
+    .find((part) => part.type === "step-finish");
+  const hasRunningTools = data.toolParts.some(
+    (tool) => tool.state.status === "running" || tool.state.status === "pending",
+  );
+  const isCompleted =
+    (!!lastStepFinish && lastStepFinish.reason !== "tool_use") ||
+    (!!data.hasVisibleOutput && !hasRunningTools);
 
   if (!hasReasoning && !hasTools) return null;
 
   const parts: string[] = [];
-  if (hasReasoning) {
+  if (isCompleted) {
+    parts.push(t("done"));
+  } else if (hasReasoning) {
     parts.push(
       data.thinkingDuration != null
         ? t("thoughtFor", { duration: `${data.thinkingDuration}s` })
@@ -34,10 +45,12 @@ export function ActivitySummary({ data }: ActivitySummaryProps) {
   return (
     <button
       type="button"
-      onClick={() => toggleForMessage(data)}
+      onClick={() => data.sourceKey && toggleForMessage(data.sourceKey, data)}
       className="flex items-center gap-2 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors py-1.5 group"
     >
-      {hasReasoning ? (
+      {isCompleted ? (
+        <CheckCircle2 className="h-3.5 w-3.5 text-[var(--tool-completed)]" />
+      ) : hasReasoning ? (
         <OpenYakLogo size={14} />
       ) : (
         <Wrench className="h-3.5 w-3.5" />

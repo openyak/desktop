@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from app.dependencies import set_skill_registry
+from app.skill.registry import SkillRegistry
 from app.agent.agent import AgentRegistry
 from app.session.system_prompt import build_system_prompt
 
@@ -55,7 +57,7 @@ class TestSystemPrompt:
         build = ar.get("build")
         parts = build_system_prompt(build)
         # Agent base prompt is in cached section
-        assert "Muse" in parts.cached or "tool" in parts.cached.lower()
+        assert "Yakyak" in parts.cached or "tool" in parts.cached.lower()
         # Environment info is in dynamic section
         assert "Working directory" in parts.dynamic
 
@@ -71,3 +73,22 @@ class TestSystemPrompt:
         # Second block (dynamic) has no cache_control
         assert blocks[1]["type"] == "text"
         assert "cache_control" not in blocks[1]
+
+    def test_includes_skill_routing_when_skills_available(self, tmp_path: Path):
+        skills_dir = tmp_path / ".openyak" / "skills" / "sheet-helper"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text(
+            "---\nname: sheet-helper\ndescription: Helps with spreadsheet workflows.\n---\nUse for sheets.",
+            encoding="utf-8",
+        )
+
+        registry = SkillRegistry(project_dir=str(tmp_path))
+        registry.scan(project_dir=str(tmp_path))
+        set_skill_registry(registry)
+
+        ar = AgentRegistry()
+        build = ar.get("build")
+        parts = build_system_prompt(build)
+
+        assert "Skill Routing" in parts.dynamic
+        assert "sheet-helper" in parts.dynamic

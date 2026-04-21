@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, memo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { MessageContent } from "./message-content";
 import { MessageActions } from "./message-actions";
+import { CompactionPart } from "@/components/parts/compaction-part";
 import { useChatStore } from "@/stores/chat-store";
+import { useActivityStore } from "@/stores/activity-store";
 import { extractTextFromParts } from "@/lib/utils";
-import type { MessageResponse, PartData, ToolPart, StepStartPart, StepFinishPart } from "@/types/message";
+import type { MessageResponse, PartData, ToolPart, StepStartPart, StepFinishPart, CompactionPart as CompactionPartType } from "@/types/message";
 import { computeDuration, type ActivityData, type ChainItem } from "@/stores/activity-store";
 
 interface AssistantMessageProps {
@@ -21,18 +23,28 @@ interface AssistantMessageProps {
 
 export function AssistantMessage({ message, combinedParts, onRegenerate, isNew = true }: AssistantMessageProps) {
   const [hovered, setHovered] = useState(false);
+  const refreshForMessage = useActivityStore((s) => s.refreshForMessage);
   const parts = combinedParts ?? message.parts.map((p) => p.data as PartData);
+  const mainParts = useMemo(
+    () => parts.filter((part) => part.type !== "compaction"),
+    [parts],
+  );
+  const compactionParts = useMemo(
+    () => parts.filter((part): part is CompactionPartType => part.type === "compaction"),
+    [parts],
+  );
+  const activityKey = message.id;
 
   // Extract text content for copy
-  const textContent = extractTextFromParts(parts);
+  const textContent = extractTextFromParts(mainParts);
 
   // Build activity data from parts
   const activityData = useMemo<ActivityData | null>(() => {
-    const reasoningTexts = parts
+    const reasoningTexts = mainParts
       .filter((p): p is PartData & { type: "reasoning" } => p.type === "reasoning")
       .map((p) => p.text);
-    const toolParts = parts.filter((p): p is ToolPart => p.type === "tool");
-    const stepParts = parts.filter(
+    const toolParts = mainParts.filter((p): p is ToolPart => p.type === "tool");
+    const stepParts = mainParts.filter(
       (p): p is StepStartPart | StepFinishPart =>
         p.type === "step-start" || p.type === "step-finish",
     );
@@ -40,45 +52,71 @@ export function AssistantMessage({ message, combinedParts, onRegenerate, isNew =
     if (reasoningTexts.length === 0 && toolParts.length === 0) return null;
 
     const chain: ChainItem[] = [];
-    for (const p of parts) {
+    for (const p of mainParts) {
       if (p.type === "reasoning") chain.push({ type: "reasoning", text: (p as PartData & { type: "reasoning" }).text });
       else if (p.type === "tool") chain.push({ type: "tool", data: p as ToolPart });
     }
 
-    const data: ActivityData = { reasoningTexts, toolParts, stepParts, chain };
+    const data: ActivityData = {
+      sourceKey: activityKey,
+      reasoningTexts,
+      toolParts,
+      stepParts,
+      hasVisibleOutput: mainParts.some((p) =>
+        p.type === "text" || p.type === "file" || p.type === "subtask",
+      ),
+      chain,
+    };
     data.thinkingDuration = computeDuration(data);
     return data;
-  }, [parts]);
+  }, [activityKey, mainParts]);
+
+  useEffect(() => {
+    if (activityData) {
+      refreshForMessage(activityKey, activityData);
+    }
+  }, [activityData, activityKey, refreshForMessage]);
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <motion.div
-        initial={isNew ? { opacity: 0, y: 6 } : false}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{
-          type: "spring",
-          stiffness: 300,
-          damping: 30,
-          opacity: { duration: 0.2 },
-        }}
-      >
-        <MessageContent parts={parts} />
-      </motion.div>
-
-      {/* Action bar — always in DOM to avoid layout shift, opacity-only toggle */}
+    <>
       <div
-        className={`transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <MessageActions
-          content={textContent}
-          onRegenerate={onRegenerate}
-          activityData={activityData}
-        />
+        <motion.div
+          initial={isNew ? { opacity: 0, y: 6 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            type: "spring",
+            stiffness: 300,
+            damping: 30,
+            opacity: { duration: 0.2 },
+          }}
+        >
+          <MessageContent parts={mainParts} />
+        </motion.div>
+
+        {/* Action bar — always in DOM to avoid layout shift, opacity-only toggle */}
+        <div
+          className={`transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          <MessageActions
+            content={textContent}
+            onRegenerate={onRegenerate}
+            activityData={activityData}
+            activityKey={activityKey}
+          />
+        </div>
       </div>
-    </div>
+
+      {compactionParts.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {compactionParts.map((part, index) => (
+            <CompactionPart key={`${activityKey}-compaction-${index}`} data={part} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -108,7 +146,7 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   if (liveParts.length === 0) {
     return (
       <div className="animate-fade-in">
-        {isModelLoading && <StreamingStage label={t("loadingModel")} />}
+        <StreamingStage label={t("stageThinking")} />
         <StreamingIndicator />
       </div>
     );
@@ -119,6 +157,7 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   // permission, waiting between steps) — show a trailing indicator.
   const isActivelyStreaming = !!streamingText || !!streamingReasoning;
   const hasAnyTool = liveParts.some((p) => p.type === "tool");
+  const hasAnyActivity = liveParts.some((p) => p.type === "reasoning" || p.type === "tool");
   // Also check if the last tool is still running
   const lastPart = liveParts[liveParts.length - 1];
   const hasRunningTool =
@@ -130,19 +169,17 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   const isGenerationDone = !!lastStepFinish && lastStepFinish.reason !== "tool_use";
   const showTail = !isActivelyStreaming && !hasRunningTool && !isGenerationDone;
 
-  let stageLabel = "Preparing";
-  if (isModelLoading) stageLabel = t("loadingModel");
-  else if (hasRunningTool) stageLabel = "Working with tools";
-  else if (isActivelyStreaming) stageLabel = "Drafting response";
-  else if (hasAnyTool) stageLabel = "Finalizing output";
+  let stageLabel = t("stageThinking");
+  if (hasRunningTool) stageLabel = t("stageWorkingWithTools");
+  else if (!isActivelyStreaming && hasAnyTool) stageLabel = t("stageFinalizing");
 
   return (
     <div className="animate-fade-in">
-      <StreamingStage label={stageLabel} />
+      {!hasAnyActivity && <StreamingStage label={isModelLoading ? t("stageThinking") : stageLabel} />}
       <MessageContent parts={liveParts} isStreaming />
       {showTail && (
         <div className="mt-2">
-          <StreamingIndicator />
+          <StreamingIndicator label={stageLabel} />
         </div>
       )}
     </div>
@@ -166,9 +203,9 @@ function StreamingStage({ label }: { label: string }) {
 }
 
 /** Animated dots — shown while waiting for or between output (Claude.ai style). */
-function StreamingIndicator() {
+function StreamingIndicator({ label = "Thinking" }: { label?: string }) {
   return (
-    <div className="flex items-center gap-1 py-3" role="status" aria-label="Generating response">
+    <div className="flex items-center gap-1 py-3" role="status" aria-label={label}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}

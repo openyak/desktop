@@ -12,11 +12,16 @@ export function SidebarHeader() {
   const toggle = useSidebarStore((s) => s.toggle);
 
   return (
-    <div className="flex h-14 items-center justify-between px-3">
+    <div className="flex h-14 items-center justify-between px-4 pt-1">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={toggle}>
-            <PanelLeft className="h-[18px] w-[18px]" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+            onClick={toggle}
+          >
+            <PanelLeft className="h-[17px] w-[17px]" />
             <span className="sr-only">{t('toggleSidebar')}</span>
           </Button>
         </TooltipTrigger>
@@ -25,9 +30,14 @@ export function SidebarHeader() {
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+            asChild
+          >
             <Link href="/c/new">
-              <SquarePen className="h-[18px] w-[18px]" />
+              <SquarePen className="h-[17px] w-[17px]" />
               <span className="sr-only">{t('newChat')}</span>
             </Link>
           </Button>

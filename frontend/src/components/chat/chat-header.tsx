@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SquarePen, Share2, Loader2, ArrowLeft, List, Square } from "lucide-react";
+import { SquarePen, Share2, Loader2, List, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { HeaderModelDropdown } from "@/components/selectors/header-model-dropdown";
 import { ContextIndicator } from "@/components/chat/context-indicator";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { OpenYakLogo } from "@/components/ui/openyak-logo";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useMessages } from "@/hooks/use-messages";
 import { API, IS_DESKTOP, resolveApiUrl } from "@/lib/constants";
 import { isRemoteMode } from "@/lib/remote-connection";
@@ -28,9 +29,10 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
   const { messages } = useMessages(sessionId);
   const [pdfLoading, setPdfLoading] = useState(false);
   const remote = isRemoteMode();
+  const workspaceIsOpen = useWorkspaceStore((s) => s.isOpen);
+  const toggleWorkspace = useWorkspaceStore((s) => s.toggle);
   const isGenerating = useChatStore((s) => s.isGenerating);
   const streamingParts = useChatStore((s) => s.streamingParts);
-  const streamId = useChatStore((s) => s.streamId);
 
   // Derive stream status label for remote mode
   const streamStatus = (() => {
@@ -40,17 +42,6 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
     if (lastPart.type === "tool" && lastPart.state.status === "running") return "Using tools...";
     return "Generating...";
   })();
-
-  const handleAbort = useCallback(async () => {
-    if (!streamId) return;
-    try {
-      const { api } = await import("@/lib/api");
-      const { API: ApiRoutes } = await import("@/lib/constants");
-      await api.post(ApiRoutes.CHAT.ABORT, { stream_id: streamId });
-    } catch {
-      // Abort is best-effort
-    }
-  }, [streamId]);
 
   const handleExportPdf = useCallback(async () => {
     if (!sessionId) return;
@@ -184,6 +175,29 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
           <span className="text-[12px] text-[var(--text-tertiary)] animate-pulse whitespace-nowrap">
             {streamStatus}
           </span>
+        )}
+
+        {!remote && sessionId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                aria-label={workspaceIsOpen ? t("hideWorkspace") : t("showWorkspace")}
+                onClick={toggleWorkspace}
+              >
+                {workspaceIsOpen ? (
+                  <PanelRightClose className="h-[18px] w-[18px]" />
+                ) : (
+                  <PanelRightOpen className="h-[18px] w-[18px]" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {workspaceIsOpen ? t("hideWorkspace") : t("showWorkspace")}
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {/* Context usage indicator — desktop only */}

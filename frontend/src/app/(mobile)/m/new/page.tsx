@@ -115,8 +115,6 @@ export default function MobileNewTaskPage() {
   }, [text, sending, files, selectedModel, workspaceDirectory, router]);
 
   // Current model name for display
-  const currentModelName = models.find((m) => m.id === selectedModel)?.name;
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}

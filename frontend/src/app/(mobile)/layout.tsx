@@ -79,7 +79,7 @@ async function syncProviderAndModel(): Promise<void> {
   // 4. Ensure selectedModel belongs to the correct provider
   const backendProviderId = BACKEND_PROVIDER_MAP[provider];
   const currentModel = store.selectedModel;
-  let needsModel = !currentModel;
+  const needsModel = !currentModel;
 
   // Check if current model is from the wrong provider
   if (currentModel && backendProviderId) {

@@ -96,7 +96,7 @@ export function HeaderModelDropdown() {
     const modelExists = selectedModel && visibleModels.some((m) => m.id === selectedModel && m.provider_id === selectedProviderId);
     if (!modelExists) {
       let chosen: ModelInfo;
-      if (activeProvider === "openyak" || activeProvider === "byok") {
+      if (activeProvider === "openyak") {
         const preferred = visibleModels.find((m) => m.id === "openyak/best-free");
         const fallback = visibleModels.find((m) => isFreeModel(m));
         chosen = preferred ?? fallback ?? visibleModels[0];
@@ -119,7 +119,7 @@ export function HeaderModelDropdown() {
     const isSubscription = activeProvider === "chatgpt";
 
     for (const m of visibleModels) {
-      if (m.id === "openyak/best-free") pinned = m;
+      if (m.id === "openyak/best-free" && activeProvider === "openyak") pinned = m;
       else if (isFreeModel(m)) free.push(m);
       else paid.push(m);
     }
@@ -167,7 +167,7 @@ export function HeaderModelDropdown() {
       <button
         type="button"
         disabled
-        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[15px] font-semibold text-[var(--text-tertiary)] rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-default"
+        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-tertiary)] rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-default"
       >
         <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         <span className="truncate">{t("loadingModels", "Loading models...")}</span>
@@ -181,7 +181,7 @@ export function HeaderModelDropdown() {
       <button
         type="button"
         onClick={() => router.push("/settings?tab=providers")}
-        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[15px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
+        className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
       >
         <span className="truncate">{t("setupProvider")}</span>
         <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
@@ -194,7 +194,7 @@ export function HeaderModelDropdown() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[15px] font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
+          className="inline-flex items-center gap-1.5 border-none bg-transparent shadow-none px-3 py-2 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors rounded-xl h-auto w-auto max-w-[220px] focus:outline-none cursor-pointer"
         >
           <span className="truncate">{shortModel}</span>
           <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />

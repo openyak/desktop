@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.schemas.message import StepFinishReason
+
 from pydantic import BaseModel
 
 
@@ -28,7 +30,7 @@ class SSEEventData(BaseModel):
     # step_finish
     tokens: dict[str, int] | None = None
     cost: float | None = None
-    reason: str | None = None
+    reason: StepFinishReason | None = None
 
     # permission_request
     permission: str | None = None

@@ -46,6 +46,9 @@ export function WorkspaceToggle({ sessionId, directory, isIndexing }: WorkspaceT
   // Resolved values depending on context
   const currentPath = sessionId ? directory : globalWorkspace;
   const displayName = getDisplayName(currentPath);
+  const pillLabel = displayName
+    ? `${t("accessLabel")}: ${displayName}`
+    : t("workspaceDisplayNone");
 
   // Handle directory selection from either native picker (desktop) or mobile browser
   const applySelectedPath = useCallback(async (path: string) => {
@@ -106,7 +109,7 @@ export function WorkspaceToggle({ sessionId, directory, isIndexing }: WorkspaceT
           ) : (
             <FolderOpen className="h-4 w-4 shrink-0" />
           )}
-          <span className="truncate">{displayName || t("workspaceNone")}</span>
+          <span className="truncate">{pillLabel}</span>
           {isIndexing && displayName && (
             <span className="text-[11px] text-[var(--text-tertiary)] shrink-0">Indexing…</span>
           )}
@@ -114,7 +117,10 @@ export function WorkspaceToggle({ sessionId, directory, isIndexing }: WorkspaceT
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
         <div className="space-y-3">
-          <p className="text-sm font-medium text-[var(--text-primary)]">{t("workspace")}</p>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-[var(--text-primary)]">{t("accessLabel")}</p>
+            <p className="text-xs text-[var(--text-tertiary)]">{t("accessDescription")}</p>
+          </div>
           <div className="rounded-lg bg-[var(--surface-secondary)] px-3 py-2 text-[13px] text-[var(--text-secondary)] break-all">
             {currentPath && currentPath !== "." ? currentPath : t("workspaceNone")}
           </div>

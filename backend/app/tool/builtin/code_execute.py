@@ -15,6 +15,7 @@ import os
 import sys
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
+from pathlib import Path
 from typing import Any
 
 from app.tool.base import ToolDefinition, ToolResult
@@ -25,6 +26,32 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30  # seconds
 MAX_TIMEOUT = 120
 MAX_OUTPUT = 51200  # 50 KB
+
+
+def _snapshot_workspace(workspace: str | None) -> dict[str, tuple[int, int]]:
+    """Return a cheap file snapshot for detecting created/modified files."""
+    if not workspace:
+        return {}
+
+    root = Path(workspace).resolve()
+    if not root.is_dir():
+        return {}
+
+    snapshot: dict[str, tuple[int, int]] = {}
+    try:
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            # mtime_ns + size is enough for UI/session tracking purposes
+            snapshot[str(path.resolve())] = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        return {}
+
+    return snapshot
 
 
 class CodeExecuteTool(ToolDefinition):
@@ -68,6 +95,7 @@ class CodeExecuteTool(ToolDefinition):
             return ToolResult(error="No code provided")
 
         timeout = min(args.get("timeout", DEFAULT_TIMEOUT), MAX_TIMEOUT)
+        before_snapshot = _snapshot_workspace(ctx.workspace)
 
         try:
             output, exit_code = await asyncio.wait_for(
@@ -83,11 +111,21 @@ class CodeExecuteTool(ToolDefinition):
             return ToolResult(error=f"Execution failed: {exc}")
 
         title = f"python: {code[:60]}..." if len(code) > 60 else f"python: {code}"
+        after_snapshot = _snapshot_workspace(ctx.workspace)
+        written_files = sorted(
+            path
+            for path, sig in after_snapshot.items()
+            if before_snapshot.get(path) != sig
+        )
 
         return ToolResult(
             output=output,
             title=title,
-            metadata={"exit_code": exit_code, "language": "python"},
+            metadata={
+                "exit_code": exit_code,
+                "language": "python",
+                "written_files": written_files,
+            },
             error=f"Code execution failed with exit code {exit_code}" if exit_code != 0 else None,
         )
 

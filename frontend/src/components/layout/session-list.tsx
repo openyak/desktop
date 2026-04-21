@@ -15,15 +15,17 @@ import { useActiveSessionId } from "@/hooks/use-active-session-id";
 import { useSessionExport } from "@/hooks/use-session-export";
 import { SessionItem } from "./session-item";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";
+import { ProjectsToolbar } from "./projects-toolbar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, MessageSquare, SearchX } from "lucide-react";
+import { Loader2, MessageSquare, SearchX, ChevronRight, FolderClosed } from "lucide-react";
 import { getChatRoute } from "@/lib/routes";
-import { cn, groupSessionsByDate } from "@/lib/utils";
+import { cn, groupSessionsByDate, groupSessionsByWorkspace } from "@/lib/utils";
 import type { SessionResponse } from "@/types/session";
 
 type FlatItem =
-  | { type: "header"; label: string }
-  | { type: "session"; session: SessionResponse; snippet?: string };
+  | { type: "header"; label: string; first?: boolean }
+  | { type: "project"; directory: string; label: string; count: number; collapsed: boolean }
+  | { type: "session"; session: SessionResponse; snippet?: string; indent: boolean };
 
 export function SessionList() {
   const { t } = useTranslation('common');
@@ -44,7 +46,12 @@ export function SessionList() {
   const { exportPdf, exportMarkdown } = useSessionExport();
   const queryClient = useQueryClient();
   const searchQuery = useSidebarStore((s) => s.searchQuery);
+  const collapsedProjects = useSidebarStore((s) => s.collapsedProjects);
+  const toggleProjectCollapsed = useSidebarStore((s) => s.toggleProjectCollapsed);
+  const organizeMode = useSidebarStore((s) => s.organizeMode);
+  const sortBy = useSidebarStore((s) => s.sortBy);
   const isContentSearch = searchQuery.trim().length >= 2;
+  const hasSearch = searchQuery.trim().length > 0;
   const { data: searchResults, isLoading: isSearching } = useSearchSessions(searchQuery);
 
   // Flatten infinite query pages into a single array
@@ -101,27 +108,93 @@ export function SessionList() {
     );
   }, [sessions, searchQuery, isContentSearch, searchResults]);
 
-  const pinned = useMemo(() => filtered.filter((s) => s.is_pinned), [filtered]);
-  const unpinned = useMemo(() => filtered.filter((s) => !s.is_pinned), [filtered]);
-  const grouped = useMemo(() => groupSessionsByDate(unpinned), [unpinned]);
+  // Sort sessions by the selected timestamp (desc)
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    list.sort((a, b) => {
+      const aVal = sortBy === "created" ? a.time_created : a.time_updated;
+      const bVal = sortBy === "created" ? b.time_created : b.time_updated;
+      return new Date(bVal).getTime() - new Date(aVal).getTime();
+    });
+    return list;
+  }, [filtered, sortBy]);
 
-  // Flatten grouped data into a single list for virtualization
+  const pinned = useMemo(() => sorted.filter((s) => s.is_pinned), [sorted]);
+  const unpinned = useMemo(() => sorted.filter((s) => !s.is_pinned), [sorted]);
+
+  // Directories of the projects currently visible — used by the collapse-all toolbar action.
+  const projectDirectories = useMemo(
+    () => groupSessionsByWorkspace(unpinned).projects.map((p) => p.directory),
+    [unpinned],
+  );
+
+  // Flatten into a single list for virtualization. Respects `organizeMode`:
+  //  - by-project:    Pinned → Projects (collapsible) → Chats (no workspace)
+  //  - chats-first:   Pinned → Chats → Projects
+  //  - chronological: Pinned → Today/Yesterday/… (flat, no project grouping)
+  // While searching: flat result list, no grouping.
   const flatItems = useMemo(() => {
     const items: FlatItem[] = [];
+
+    if (hasSearch) {
+      for (const s of filtered) {
+        items.push({ type: "session", session: s, snippet: snippetMap.get(s.id), indent: false });
+      }
+      return items;
+    }
+
     if (pinned.length > 0) {
-      items.push({ type: "header", label: "pinned" });
-      for (const session of pinned) {
-        items.push({ type: "session", session, snippet: snippetMap.get(session.id) });
+      items.push({ type: "header", label: "pinned", first: items.length === 0 });
+      for (const s of pinned) {
+        items.push({ type: "session", session: s, indent: false });
       }
     }
-    for (const group of grouped) {
-      items.push({ type: "header", label: group.label });
-      for (const session of group.sessions) {
-        items.push({ type: "session", session, snippet: snippetMap.get(session.id) });
+
+    if (organizeMode === "chronological") {
+      const grouped = groupSessionsByDate(unpinned);
+      for (const group of grouped) {
+        items.push({ type: "header", label: group.label, first: items.length === 0 });
+        for (const s of group.sessions) {
+          items.push({ type: "session", session: s, indent: false });
+        }
       }
+      return items;
     }
+
+    const { projects, chats } = groupSessionsByWorkspace(unpinned);
+
+    const pushProjects = () => {
+      if (projects.length === 0) return;
+      items.push({ type: "header", label: "projects", first: items.length === 0 });
+      for (const p of projects) {
+        const collapsed = !!collapsedProjects[p.directory];
+        items.push({ type: "project", directory: p.directory, label: p.label, count: p.sessions.length, collapsed });
+        if (!collapsed) {
+          for (const s of p.sessions) {
+            items.push({ type: "session", session: s, indent: true });
+          }
+        }
+      }
+    };
+
+    const pushChats = () => {
+      if (chats.length === 0) return;
+      items.push({ type: "header", label: "chats", first: items.length === 0 });
+      for (const s of chats) {
+        items.push({ type: "session", session: s, indent: false });
+      }
+    };
+
+    if (organizeMode === "chats-first") {
+      pushChats();
+      pushProjects();
+    } else {
+      pushProjects();
+      pushChats();
+    }
+
     return items;
-  }, [pinned, grouped, snippetMap]);
+  }, [hasSearch, filtered, pinned, unpinned, snippetMap, collapsedProjects, organizeMode]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -129,8 +202,9 @@ export function SessionList() {
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {
       const item = flatItems[index];
-      if (item.type === "header") return index === 0 ? 32 : 40;
-      return item.snippet ? 58 : 46;
+      if (item.type === "header") return item.first ? 24 : 32;
+      if (item.type === "project") return 30;
+      return item.snippet ? 44 : 30;
     },
     overscan: 10,
   });
@@ -246,7 +320,7 @@ export function SessionList() {
 
     // If the session being deleted has active generation, abort it first
     const chatState = useChatStore.getState();
-    if (chatState.sessionId === id && chatState.isGenerating && chatState.streamId) {
+    if (chatState.sessionId === id && (chatState.isGenerating || chatState.isCompacting) && chatState.streamId) {
       api.post(API.CHAT.ABORT, { stream_id: chatState.streamId }).catch(() => {});
       chatState.finishGeneration();
     }
@@ -331,10 +405,10 @@ export function SessionList() {
 
   if (isLoading || (isContentSearch && isSearching) || (isError && sessions.length === 0)) {
     return (
-      <div className="flex-1 px-3 py-2">
+      <div className="flex-1 px-4 py-3">
         <div className="flex h-full min-h-0 flex-col gap-2">
           {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full rounded-lg" />
+            <Skeleton key={i} className="h-12 w-full rounded-2xl" />
           ))}
           <div className="flex-1" />
         </div>
@@ -344,7 +418,7 @@ export function SessionList() {
 
   if (filtered.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
         {searchQuery ? (
           <>
             <SearchX className="h-8 w-8 text-[var(--text-tertiary)]" />
@@ -377,7 +451,7 @@ export function SessionList() {
         aria-label="Conversation list"
         tabIndex={0}
         onKeyDown={handleListKeyDown}
-        className="flex-1 overflow-y-auto overscroll-contain outline-none pt-1 scrollbar-auto"
+        className="flex-1 overflow-y-auto overscroll-contain outline-none pt-2 scrollbar-auto"
       >
         <div
           className="relative w-full"
@@ -385,22 +459,47 @@ export function SessionList() {
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = flatItems[virtualRow.index];
+            const key =
+              item.type === "header"
+                ? `h-${item.label}`
+                : item.type === "project"
+                  ? `p-${item.directory}`
+                  : item.session.id;
             return (
               <div
-                key={item.type === "header" ? `h-${item.label}` : item.session.id}
+                key={key}
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 className={cn(
                   "absolute left-0 w-full",
-                  item.type === "session" ? "pb-0.5" : "pb-1",
-                  item.type === "header" && virtualRow.index > 0 && "pt-2",
+                  item.type === "header" && !item.first && "pt-2",
                 )}
-                style={{ transform: `translateY(${virtualRow.start}px)`, zIndex: flatItems.length - virtualRow.index }}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
               >
                 {item.type === "header" ? (
-                  <p className="px-4 py-2 text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                    {t(item.label)}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 pl-5 pr-3 pb-1 pt-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                      {t(item.label)}
+                    </p>
+                    {item.first && !hasSearch && (
+                      <ProjectsToolbar projectDirectories={projectDirectories} />
+                    )}
+                  </div>
+                ) : item.type === "project" ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleProjectCollapsed(item.directory)}
+                    className="group mx-3 flex w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "h-3 w-3 shrink-0 text-[var(--text-tertiary)] transition-transform",
+                        !item.collapsed && "rotate-90",
+                      )}
+                    />
+                    <FolderClosed className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+                    <span className="flex-1 truncate text-left">{item.label}</span>
+                  </button>
                 ) : (
                   <SessionItem
                     session={item.session}
@@ -414,6 +513,7 @@ export function SessionList() {
                     onEditStart={handleEditStart}
                     onEditEnd={handleEditEnd}
                     snippet={item.snippet}
+                    indent={item.indent}
                     isFocused={virtualRow.index === focusedIndex}
                   />
                 )}

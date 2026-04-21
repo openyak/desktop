@@ -4,16 +4,14 @@ import { useState } from "react";
 import {
   ArrowUpRight,
   Check,
-  Clock,
   Loader2,
-  Repeat,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAutomationRuns } from "@/hooks/use-automations";
-import { humanizeCron, humanizeSchedule, relativeTime, formatDuration, parseCron, buildCron } from "./helpers";
-import type { ScheduleConfig, TaskRunResponse } from "@/types/automation";
+import { humanizeCron, relativeTime, formatDuration, parseCron, buildCron } from "./helpers";
+import type { TaskRunResponse } from "@/types/automation";
 
 /* ------------------------------------------------------------------ */
 /* Shared styles                                                       */

@@ -97,13 +97,41 @@ class GenerationJob:
         """Create a subscriber queue. Replays missed events if last_event_id > 0."""
         q: asyncio.Queue[SSEEvent | None] = asyncio.Queue(maxsize=5000)
 
-        # Replay buffered events after last_event_id
-        for event in self.events:
-            if event.id is not None and event.id > last_event_id:
-                q.put_nowait(event)
+        # Replay buffered events after last_event_id. On long generations the
+        # replay slice can be larger than the queue capacity; if that happens,
+        # trim the oldest replay events instead of raising QueueFull (which
+        # would turn a harmless reconnect into an HTTP 500 and strand the UI in
+        # "finalizing"). The frontend treats DESYNC as a signal to refetch DB
+        # state, so it is safe to explicitly notify it when replay is trimmed.
+        replay_events = [
+            event
+            for event in self.events
+            if event.id is not None and event.id > last_event_id
+        ]
+        reserve = 1 if self._completed else 0
+        capacity = max(0, q.maxsize - reserve)
+        if len(replay_events) > capacity:
+            dropped = len(replay_events) - capacity
+            logger.warning(
+                "Replay buffer overflow for stream %s: dropping %d old replay events",
+                self.stream_id,
+                dropped,
+            )
+            desync = SSEEvent(DESYNC, {"dropped_event_id": replay_events[dropped - 1].id})
+            desync.id = replay_events[dropped - 1].id
+            q.put_nowait(desync)
+            replay_events = replay_events[dropped:]
+
+        for event in replay_events:
+            q.put_nowait(event)
 
         # If already completed, signal end immediately
         if self._completed:
+            if q.full():
+                try:
+                    q.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
             q.put_nowait(None)
         else:
             self.subscribers.append(q)

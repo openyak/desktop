@@ -11,11 +11,12 @@ import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useBillingStore } from "@/stores/billing-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useActivityStore } from "@/stores/activity-store";
 import { useSSE } from "./use-sse";
 import { useRemoteGenerationSync } from "./use-remote-generation-sync";
 import type { InfiniteData } from "@tanstack/react-query";
 import type { FileAttachment, PromptResponse, RespondRequest } from "@/types/chat";
-import type { MessageResponse, PaginatedMessages } from "@/types/message";
+import type { PaginatedMessages } from "@/types/message";
 import type { SessionResponse } from "@/types/session";
 
 /**
@@ -29,6 +30,7 @@ export function useChat(currentSessionId?: string) {
   // Avoid `useChatStore()` without a selector — it subscribes to the entire
   // store and causes re-renders on every streaming delta (~dozens/sec).
   const isGenerating = useChatStore((s) => s.isGenerating);
+  const isCompacting = useChatStore((s) => s.isCompacting);
   const streamId = useChatStore((s) => s.streamId);
   const pendingUserText = useChatStore((s) => s.pendingUserText);
   const pendingAttachments = useChatStore((s) => s.pendingAttachments);
@@ -52,13 +54,25 @@ export function useChat(currentSessionId?: string) {
       const chatState = useChatStore.getState();
       const settingsState = useSettingsStore.getState();
 
-      if (chatState.isGenerating || (!text.trim() && (!attachments || attachments.length === 0))) return false;
+      if (chatState.isGenerating || chatState.isCompacting || (!text.trim() && (!attachments || attachments.length === 0))) return false;
 
       // New chat must start from a clean per-session state to avoid
       // leaking any transient stream/session context from previous chats.
       if (!currentSessionId) {
         chatState.reset();
       }
+
+      // Starting a fresh generation invalidates any side panels that were
+      // showing the previous assistant response.
+      useActivityStore.getState().close();
+      try {
+        const { useArtifactStore } = require("@/stores/artifact-store");
+        useArtifactStore.getState().close();
+      } catch {}
+      try {
+        const { usePlanReviewStore } = require("@/stores/plan-review-store");
+        usePlanReviewStore.getState().close();
+      } catch {}
 
       // Show loading state + optimistic user bubble immediately
       chatState.beginSending(text.trim(), attachments);
@@ -171,6 +185,7 @@ export function useChat(currentSessionId?: string) {
     }
     if (sessionId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(sessionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.detail(sessionId) });
     }
     queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
   }, [queryClient]);
@@ -203,7 +218,19 @@ export function useChat(currentSessionId?: string) {
       const chatState = useChatStore.getState();
       const settingsState = useSettingsStore.getState();
 
-      if (chatState.isGenerating || (!newText.trim() && (!attachments || attachments.length === 0)) || !currentSessionId) return false;
+      if (chatState.isGenerating || chatState.isCompacting || (!newText.trim() && (!attachments || attachments.length === 0)) || !currentSessionId) return false;
+
+      // Close any panels bound to the previous assistant response so resend
+      // doesn't keep showing stale "done" activity while the new run is live.
+      useActivityStore.getState().close();
+      try {
+        const { useArtifactStore } = require("@/stores/artifact-store");
+        useArtifactStore.getState().close();
+      } catch {}
+      try {
+        const { usePlanReviewStore } = require("@/stores/plan-review-store");
+        usePlanReviewStore.getState().close();
+      } catch {}
 
       chatState.beginSending(newText.trim(), attachments);
 
@@ -376,6 +403,7 @@ export function useChat(currentSessionId?: string) {
     respondToQuestion,
     respondToPlanReview,
     isGenerating,
+    isCompacting,
     streamId,
     pendingUserText,
     pendingAttachments,

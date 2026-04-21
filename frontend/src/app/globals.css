@@ -1,22 +1,23 @@
 @import "tailwindcss";
 
-/* ─── OpenYak — Pure Black & White ─── */
+/* ─── OpenYak — Codex-aligned defaults ─── */
 
 :root {
-  /* Surface — pure whites */
+  /* Surface */
   --surface-primary: #FFFFFF;
-  --surface-secondary: #F5F5F5;
-  --surface-tertiary: #EBEBEB;
-  --surface-chat: #FAFAFA;
+  --surface-secondary: #F6F6F6;
+  --surface-tertiary: #EFEFEF;
+  --surface-chat: #FFFFFF;
 
-  /* Text — pure darks */
-  --text-primary: #171717;
-  --text-secondary: #525252;
-  --text-tertiary: #A3A3A3;
+  /* Text */
+  --text-primary: #1A1C1F;
+  --text-secondary: #5F6368;
+  --text-tertiary: #8A8F98;
 
-  /* Border — pure grays */
-  --border-default: #E5E5E5;
-  --border-heavy: #D4D4D4;
+  /* Border */
+  --border-default: #E3E4E7;
+  --border-heavy: #D2D5DA;
+  --border-subtle: rgba(26, 28, 31, 0.08);
 
   /* Code block surfaces (light theme uses dark code blocks like ChatGPT/Claude) */
   --code-block-bg: #2F2F2F;
@@ -26,9 +27,9 @@
   --code-block-text-hover: #FFFFFF;
   --code-block-success: #4EC9B0;
 
-  /* Brand — Pure Black */
-  --brand-primary: #171717;
-  --brand-primary-hover: #404040;
+  /* Brand */
+  --brand-primary: #339CFF;
+  --brand-primary-hover: #238EFF;
   --brand-primary-text: #FFFFFF;
 
   /* Semantic */
@@ -37,17 +38,17 @@
   --color-destructive: #EF4444;
 
   /* Sidebar */
-  --sidebar-bg: #FAFAFA;
-  --sidebar-hover: #F0F0F0;
-  --sidebar-active: #E8E8E8;
-  --sidebar-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --sidebar-active-border: rgba(0, 0, 0, 0.04);
+  --sidebar-bg: #F7F7F8;
+  --sidebar-hover: #EEEEF0;
+  --sidebar-active: #E7E9ED;
+  --sidebar-active-shadow: 0 1px 2px rgba(26, 28, 31, 0.05);
+  --sidebar-active-border: rgba(26, 28, 31, 0.05);
 
   /* User message bubble */
-  --user-bubble-bg: #F7F7F8;
+  --user-bubble-bg: #F4F5F7;
 
   /* Ring */
-  --ring: #171717;
+  --ring: #339CFF;
 
   /* Radius */
   --radius: 0.625rem;
@@ -75,66 +76,67 @@
 }
 
 .dark {
-  /* Surface — warm brown-tinted blacks (aligned with website dark theme) */
-  --surface-primary: #0e0d0a;
-  --surface-secondary: #171511;
-  --surface-tertiary: #23201a;
-  --surface-chat: #0e0d0a;
+  /* Surface */
+  --surface-primary: #181818;
+  --surface-secondary: #202020;
+  --surface-tertiary: #292929;
+  --surface-chat: #181818;
 
-  /* Text — warm-tinted for readability */
-  --text-primary: #f2efe9;
-  --text-secondary: #b9b3a7;
-  --text-tertiary: #8c8c8c;
+  /* Text */
+  --text-primary: #FFFFFF;
+  --text-secondary: #C2C2C2;
+  --text-tertiary: #95979D;
 
-  /* Border — warm tints */
-  --border-default: #2b2620;
-  --border-heavy: #3d362d;
+  /* Border */
+  --border-default: #313131;
+  --border-heavy: #404040;
+  --border-subtle: rgba(255, 255, 255, 0.065);
 
-  /* Code block surfaces — slightly lifted from page bg for contrast */
-  --code-block-bg: #1e1b17;
-  --code-block-header: #262219;
-  --code-block-border: #453d32;
-  --code-block-text: #D4D4D4;
-  --code-block-text-hover: #FFFFFF;
-  --code-block-success: #4EC9B0;
+  /* Code block surfaces */
+  --code-block-bg: #1b1b1b;
+  --code-block-header: #222222;
+  --code-block-border: #323232;
+  --code-block-text: #d8d8d8;
+  --code-block-text-hover: #f8f9fb;
+  --code-block-success: #55d6a6;
 
-  /* Brand — warm white */
-  --brand-primary: #f2efe9;
-  --brand-primary-hover: #FFFFFF;
-  --brand-primary-text: #0e0d0a;
+  /* Brand */
+  --brand-primary: #339CFF;
+  --brand-primary-hover: #4AA8FF;
+  --brand-primary-text: #FFFFFF;
 
   /* Semantic */
-  --color-success: #22C55E;
-  --color-warning: #EAB308;
-  --color-destructive: #EF4444;
+  --color-success: #3ed08f;
+  --color-warning: #d7b565;
+  --color-destructive: #e86d73;
 
-  /* Sidebar — darkest layer for clear panel separation */
-  --sidebar-bg: #080705;
-  --sidebar-hover: #171511;
-  --sidebar-active: #23201a;
-  --sidebar-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* Sidebar */
+  --sidebar-bg: #252525;
+  --sidebar-hover: #2D2D2D;
+  --sidebar-active: #3A3A3A;
+  --sidebar-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   --sidebar-active-border: rgba(255, 255, 255, 0.04);
 
-  /* User message bubble — distinct from background */
-  --user-bubble-bg: #1c1a15;
+  /* User message bubble / composer family */
+  --user-bubble-bg: #232323;
 
   /* Ring */
-  --ring: #f2efe9;
+  --ring: #339CFF;
 
   /* Switch */
-  --switch-checked: #827a6d;
+  --switch-checked: #339CFF;
 
-  /* Shadows — stronger for depth on dark surfaces */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.55), 0 4px 8px -4px rgba(0, 0, 0, 0.45);
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 10px 24px -14px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 24px 64px -30px rgba(0, 0, 0, 0.58);
 
-  /* Prose — content styling */
-  --prose-body: #eae7e0;
-  --prose-link: #60A5FA;
-  --prose-accent: #60A5FA;
-  --prose-blockquote-bg: rgba(96, 165, 250, 0.06);
-  --prose-marker: #6b6b6b;
+  /* Prose */
+  --prose-body: #e8e8e8;
+  --prose-link: #8ab4ff;
+  --prose-accent: #9fc1ff;
+  --prose-blockquote-bg: rgba(138, 180, 255, 0.06);
+  --prose-marker: #727272;
 }
 
 /* ─── Base Styles ─── */
@@ -155,12 +157,16 @@
     overscroll-behavior: none;
     background: var(--surface-primary);
     color: var(--text-primary);
-    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
-    letter-spacing: -0.01em;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, var(--font-cjk), sans-serif;
+    font-size: 13px;
+    line-height: 1.55;
+    letter-spacing: -0.012em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark body {
+    background: var(--surface-chat);
   }
 
   /* ─── Scrollbar Styling ─── */
@@ -264,8 +270,8 @@
 /* ─── Code Block ─── */
 
 pre code {
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
-  font-size: 0.8125rem;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
   line-height: 1.6;
 }
 
@@ -420,8 +426,8 @@ pre code {
 .prose {
   max-width: none;
   font-family: inherit;
-  font-size: 15px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.65;
   color: var(--prose-body);
 }
 

@@ -67,14 +67,9 @@ export function ReasoningPart({ texts, toolParts = [], isStreaming, onDurationCh
   if (isStreaming) {
     const timer = elapsed > 0 ? ` ${elapsed}s` : "";
     if (hasRunningTool && lastRunningTool) {
-      // Tool running → show tool name + timer
-      label = getToolLabel(lastRunningTool, t) + timer;
+      label = `${t("stageWorkingWithTools")}${timer}`;
     } else {
-      // Pure thinking → show latest reasoning sentence + timer
-      const lastText = texts[texts.length - 1] ?? "";
-      const sentences = lastText.split(/[。.!\n]/).filter(Boolean);
-      const latestSentence = sentences[sentences.length - 1]?.trim().slice(0, 50) ?? "";
-      label = (latestSentence || t("thinkingIndicator")) + timer;
+      label = `${t("stageThinking")}${timer}`;
     }
   } else {
     label = elapsed > 0 ? t("thoughtFor", { duration: `${elapsed}s` }) : t("reasoning");

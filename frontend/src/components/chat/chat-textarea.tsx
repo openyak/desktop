@@ -38,7 +38,7 @@ const ChatTextarea = forwardRef<HTMLTextAreaElement, ChatTextareaProps>(
         ref={ref}
         rows={1}
         className={cn(
-          "w-full resize-none bg-transparent text-[15px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none overflow-y-auto scrollbar-none",
+          "w-full resize-none bg-transparent text-[13px] leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none overflow-y-auto scrollbar-none",
           className,
         )}
         onKeyDown={handleKeyDown}

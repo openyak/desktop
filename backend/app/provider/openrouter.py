@@ -28,7 +28,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Platform-sponsored free models: virtual_id → (real_openrouter_id, display_name)
 # These appear as free models in the UI but route to paid models under the hood.
 PLATFORM_FREE_MODELS: dict[str, tuple[str, str]] = {
-    "openyak/best-free": ("openrouter/free", "OpenYak Best Free"),
+    "openyak/best-free": ("openrouter/free", "Yak Free"),
 }
 
 # Reverse lookup: real_id → set of virtual_ids (built from PLATFORM_FREE_MODELS)
@@ -173,21 +173,24 @@ class OpenRouterProvider(OpenAICompatProvider):
                 )
             )
 
-        # Inject platform free virtual models (copy capabilities from the real model)
-        models_by_id = {m.id: m for m in models}
-        for virtual_id, (real_id, display_name) in PLATFORM_FREE_MODELS.items():
-            source = models_by_id.get(real_id)
-            if source:
-                models.append(
-                    ModelInfo(
-                        id=virtual_id,
-                        name=display_name,
-                        provider_id=self._provider_id,
-                        capabilities=source.capabilities,
-                        pricing=ModelPricing(prompt=0, completion=0),
-                        metadata=source.metadata,
+        # Inject platform free virtual models only on the OpenYak proxy instance.
+        # User BYOK OpenRouter instances must not surface "openyak/best-free" —
+        # it's a platform-sponsored virtual model, not a real OpenRouter model.
+        if self._provider_id == "openyak-proxy":
+            models_by_id = {m.id: m for m in models}
+            for virtual_id, (real_id, display_name) in PLATFORM_FREE_MODELS.items():
+                source = models_by_id.get(real_id)
+                if source:
+                    models.append(
+                        ModelInfo(
+                            id=virtual_id,
+                            name=display_name,
+                            provider_id=self._provider_id,
+                            capabilities=source.capabilities,
+                            pricing=ModelPricing(prompt=0, completion=0),
+                            metadata=source.metadata,
+                        )
                     )
-                )
 
         self._models_cache = models
         self._cache_timestamp = time.time()  # Record when cache was updated

@@ -29,6 +29,7 @@ import { useAuthStore, useAuthHasHydrated } from "@/stores/auth-store";
 import { useAutoDetectProvider } from "@/hooks/use-auto-detect-provider";
 import { useActivityStore } from "@/stores/activity-store";
 import { useArtifactStore } from "@/stores/artifact-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { api } from "@/lib/api";
 import {
   API,
@@ -63,6 +64,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const activityIsOpen = useActivityStore((s) => s.isOpen);
   const artifactIsOpen = useArtifactStore((s) => s.isOpen);
+  const workspaceIsOpen = useWorkspaceStore((s) => s.isOpen);
   const artifactWidth = useArtifactStore((s) => s.panelWidth);
   const planReviewIsOpen = usePlanReviewStore((s) => s.isOpen);
   const planReviewWidth = usePlanReviewStore((s) => s.panelWidth);
@@ -185,7 +187,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const marginLeft = isDesktop && !isCollapsed ? SIDEBAR_WIDTH : 0;
   const isChatPage = pathname?.startsWith("/c/") ?? false;
   const isActiveChat = isChatPage && pathname !== "/c/new";
-  const showWorkspace = isDesktop && isActiveChat;
+  const showWorkspace = isDesktop && isActiveChat && workspaceIsOpen;
   const overlayWidth = artifactIsOpen
     ? artifactWidth
     : planReviewIsOpen

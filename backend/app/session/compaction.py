@@ -14,6 +14,7 @@ Auto-continue: Append "Continue if you have next steps"
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select, update
@@ -45,6 +46,13 @@ SKIP_RECENT_TURNS = 2  # Don't compact the last N assistant messages
 PROTECTED_TOOLS = frozenset({"skill"})  # Never prune these tool outputs
 
 
+@dataclass
+class CompactionResult:
+    pruned_parts: int = 0
+    summary: str | None = None
+    summary_visible: bool = False
+
+
 async def run_compaction(
     session_id: str,
     *,
@@ -53,9 +61,15 @@ async def run_compaction(
     provider_registry: ProviderRegistry,
     agent_registry: AgentRegistry,
     model_id: str | None = None,
-) -> None:
+    visible_summary: bool = False,
+) -> CompactionResult:
     """Run two-phase compaction on a session's history."""
     logger.info("Running compaction on session %s", session_id)
+    result = CompactionResult(summary_visible=visible_summary)
+
+    if job.abort_event.is_set():
+        logger.info("Compaction aborted before start for session %s", session_id)
+        return result
 
     # Signal compaction start
     job.publish(SSEEvent(COMPACTION_START, {
@@ -67,16 +81,20 @@ async def run_compaction(
     job.publish(SSEEvent(COMPACTION_PHASE, {
         "session_id": session_id, "phase": "prune", "status": "started",
     }))
-    await _phase1_prune(session_id, session_factory=session_factory)
+    result.pruned_parts = await _phase1_prune(session_id, session_factory=session_factory)
     job.publish(SSEEvent(COMPACTION_PHASE, {
         "session_id": session_id, "phase": "prune", "status": "completed",
     }))
+
+    if job.abort_event.is_set():
+        logger.info("Compaction aborted after prune for session %s", session_id)
+        return result
 
     # Phase 2: Generate summary
     job.publish(SSEEvent(COMPACTION_PHASE, {
         "session_id": session_id, "phase": "summarize", "status": "started",
     }))
-    summary = await _phase2_summarize(
+    result.summary = await _phase2_summarize(
         session_id,
         job=job,
         session_factory=session_factory,
@@ -88,14 +106,25 @@ async def run_compaction(
         "session_id": session_id, "phase": "summarize", "status": "completed",
     }))
 
-    if summary:
-        # Insert summary as a synthetic user message
+    if job.abort_event.is_set():
+        logger.info("Compaction aborted during summarize for session %s", session_id)
+        return result
+
+    if result.summary:
+        # Auto compaction keeps the injected summary invisible so it doesn't
+        # interrupt the normal assistant flow. Manual compaction should surface
+        # the summary so the user can see what the AI actually compressed.
         async with session_factory() as db:
             async with db.begin():
                 msg = await create_message(
                     db,
                     session_id=session_id,
-                    data={"role": "user", "agent": "compaction", "system": True},
+                    data={
+                        "role": "assistant" if visible_summary else "user",
+                        "agent": "compaction",
+                        "system": True,
+                        **({"summary": True} if visible_summary else {}),
+                    },
                 )
                 await create_part(
                     db,
@@ -103,7 +132,11 @@ async def run_compaction(
                     session_id=session_id,
                     data={
                         "type": "text",
-                        "text": f"[Context Summary]\n\n{summary}\n\nContinue if you have next steps.",
+                        "text": (
+                            f"[Context Summary]\n\n{result.summary}"
+                            if visible_summary
+                            else f"[Context Summary]\n\n{result.summary}\n\nContinue if you have next steps."
+                        ),
                         "synthetic": True,
                     },
                 )
@@ -114,16 +147,23 @@ async def run_compaction(
                     data={"type": "compaction", "auto": True},
                 )
 
-    job.publish(SSEEvent(COMPACTED, {"session_id": session_id}))
+    job.publish(SSEEvent(COMPACTED, {
+        "session_id": session_id,
+        "summary_created": bool(result.summary),
+        "pruned_parts": result.pruned_parts,
+        "visible_summary": visible_summary,
+    }))
     logger.info("Compaction complete for session %s", session_id)
+    return result
 
 
 async def _phase1_prune(
     session_id: str,
     *,
     session_factory: async_sessionmaker[AsyncSession],
-) -> None:
+) -> int:
     """Mark old tool outputs as truncated to reduce context size."""
+    pruned_parts = 0
     async with session_factory() as db:
         async with db.begin():
             # Get all messages ordered by time
@@ -136,7 +176,7 @@ async def _phase1_prune(
             messages = list(result.scalars().all())
 
             if len(messages) <= SKIP_RECENT_TURNS * 2:
-                return  # Not enough history to prune
+                return 0  # Not enough history to prune
 
             # Skip the last N turns (each turn = user + assistant)
             cutoff = len(messages) - (SKIP_RECENT_TURNS * 2)
@@ -181,8 +221,10 @@ async def _phase1_prune(
                     updated_state["time_compacted"] = "auto"
                     updated_data["state"] = updated_state
                     part.data = updated_data
+                    pruned_parts += 1
 
             await db.flush()
+    return pruned_parts
 
 
 async def _phase2_summarize(
@@ -238,6 +280,9 @@ async def _phase2_summarize(
             system=compaction_agent.system_prompt,
             max_tokens=4096,
         ):
+            if job.abort_event.is_set():
+                logger.info("Compaction summarize stream aborted for session %s", session_id)
+                return None
             if chunk.type == "text-delta":
                 summary += chunk.data.get("text", "")
                 # Emit progress every ~200 chars to avoid flooding

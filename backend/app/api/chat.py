@@ -7,10 +7,13 @@ import functools
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Request
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
 
 from app.dependencies import (
     AgentRegistryDep,
@@ -21,16 +24,21 @@ from app.dependencies import (
     ToolRegistryDep,
 )
 from app.models.todo import Todo
-from app.schemas.chat import AbortRequest, EditAndResendRequest, PromptRequest, PromptResponse, RespondRequest
+from app.models.message import Message
+from app.schemas.chat import AbortRequest, CompactRequest, EditAndResendRequest, PromptRequest, PromptResponse, RespondRequest
+from app.session.compaction import run_compaction
+from app.session.manager import get_session
 from app.session.manager import delete_messages_after, update_message_file_parts, update_message_text
 from app.session.processor import run_generation
-from app.streaming.events import AGENT_ERROR, PERMISSION_RESOLVED, QUESTION_RESOLVED, SSEEvent
+from app.streaming.events import AGENT_ERROR, COMPACTION_ERROR, DONE, PERMISSION_RESOLVED, QUESTION_RESOLVED, SSEEvent
 from app.streaming.manager import GenerationJob, StreamManager
 from app.utils.id import generate_ulid
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_MANUAL_COMPACTION_MIN_USAGE_RATIO = 0.5
 
 # Heartbeat interval (seconds) — prevents proxy/CDN timeout
 _HEARTBEAT_INTERVAL = 15.0
@@ -68,6 +76,52 @@ async def _run_with_semaphore(sm: StreamManager, job: GenerationJob, coro) -> No
         sm._semaphore.release()
 
 
+async def _get_session_context_usage_ratio(
+    session_factory,
+    session_id: str,
+    provider_registry,
+    model_id: str | None,
+) -> float | None:
+    resolved = provider_registry.resolve_model(model_id) if model_id else None
+    if resolved is None and model_id is None:
+        return None
+    if resolved is None:
+        return None
+
+    _provider, model_info = resolved
+    effective_context = model_info.metadata.get("effective_context_window") if model_info.metadata else None
+    max_context = (
+        min(effective_context, model_info.capabilities.max_context)
+        if isinstance(effective_context, (int, float)) and effective_context > 0
+        else model_info.capabilities.max_context
+    )
+    if not max_context or max_context <= 0:
+        return None
+
+    async with session_factory() as db:
+        async with db.begin():
+            result = await db.execute(
+                select(Message)
+                .where(Message.session_id == session_id)
+                .order_by(Message.time_created.desc())
+            )
+            messages = list(result.scalars().all())
+
+    for msg in messages:
+        data = msg.data or {}
+        if data.get("role") != "assistant":
+            continue
+        tokens = data.get("tokens") or {}
+        if not isinstance(tokens, dict):
+            continue
+        input_tokens = int(tokens.get("input", 0) or 0)
+        cache_read = int(tokens.get("cache_read", 0) or 0)
+        total_tokens = input_tokens + cache_read
+        if total_tokens > 0:
+            return total_tokens / max_context
+    return 0.0
+
+
 @router.post("/chat/prompt", response_model=PromptResponse)
 async def start_prompt(
     body: PromptRequest,
@@ -102,6 +156,92 @@ async def start_prompt(
     job.task = task  # prevent GC from silently cancelling the task
 
     return PromptResponse(stream_id=stream_id, session_id=session_id)
+
+
+@router.post("/chat/compact", response_model=PromptResponse)
+async def start_compaction(
+    body: CompactRequest,
+    sm: StreamManagerDep,
+    session_factory: SessionFactoryDep,
+    provider_registry: ProviderRegistryDep,
+    agent_registry: AgentRegistryDep,
+) -> PromptResponse:
+    """Start a manual compaction stream. Reuses the normal SSE/abort lifecycle."""
+    async with session_factory() as db:
+        async with db.begin():
+            session = await get_session(db, body.session_id)
+            if session is None:
+                raise HTTPException(status_code=404, detail="Session not found")
+
+    usage_ratio = await _get_session_context_usage_ratio(
+        session_factory,
+        body.session_id,
+        provider_registry,
+        body.model_id,
+    )
+    if usage_ratio is not None and usage_ratio < _MANUAL_COMPACTION_MIN_USAGE_RATIO:
+        raise HTTPException(
+            status_code=409,
+            detail="Manual compaction is available only after context usage reaches 50%",
+        )
+
+    if any(job.session_id == body.session_id and not job.completed for job in sm._jobs.values()):
+        raise HTTPException(status_code=409, detail="Session is currently busy")
+
+    stream_id = generate_ulid()
+    job = sm.create_job(stream_id=stream_id, session_id=body.session_id)
+
+    async def _run_compaction_job() -> None:
+        try:
+            async with session_factory() as db:
+                async with db.begin():
+                    session = await get_session(db, body.session_id)
+                    if session is not None:
+                        session.time_compacting = datetime.now(timezone.utc)
+
+            result = await run_compaction(
+                body.session_id,
+                job=job,
+                session_factory=session_factory,
+                provider_registry=provider_registry,
+                agent_registry=agent_registry,
+                model_id=body.model_id,
+                visible_summary=True,
+            )
+
+            if not job.abort_event.is_set():
+                if not result.summary and result.pruned_parts == 0:
+                    job.publish(SSEEvent(COMPACTION_ERROR, {"error_message": "Nothing to compact yet"}))
+                elif not result.summary:
+                    job.publish(SSEEvent(COMPACTION_ERROR, {"error_message": "Compaction stopped before an AI summary was produced"}))
+        except Exception:
+            logger.exception("Compaction error for stream %s", job.stream_id)
+            job.publish(SSEEvent(COMPACTION_ERROR, {"error_message": "Context compaction failed. Please try again."}))
+        finally:
+            async with session_factory() as db:
+                async with db.begin():
+                    session = await get_session(db, body.session_id)
+                    if session is not None:
+                        session.time_compacting = None
+            job.publish(
+                SSEEvent(
+                    DONE,
+                    {
+                        "session_id": body.session_id,
+                        "finish_reason": "aborted" if job.abort_event.is_set() else "stop",
+                    },
+                )
+            )
+            job.complete()
+
+    task = asyncio.create_task(
+        _run_with_semaphore(sm, job, _run_compaction_job()),
+        name=f"compact-{stream_id}",
+    )
+    task.add_done_callback(functools.partial(_on_task_done, job=job))
+    job.task = task
+
+    return PromptResponse(stream_id=stream_id, session_id=body.session_id)
 
 
 @router.post("/chat/edit", response_model=PromptResponse)
@@ -163,12 +303,31 @@ async def edit_and_resend(
 
 
 @router.api_route("/chat/stream/{stream_id}", methods=["GET", "POST"])
-async def stream_events(sm: StreamManagerDep, stream_id: str, last_event_id: int = 0):
+async def stream_events(
+    request: Request,
+    sm: StreamManagerDep,
+    stream_id: str,
+    last_event_id: int = 0,
+):
     """SSE endpoint. Supports reconnect via ?last_event_id=N.
 
     Includes heartbeat every 15s to prevent proxy/CDN timeouts (matching OpenCode).
     Sets job.interactive=True to enable permission ask and question blocking.
     """
+    # Native EventSource reconnects send Last-Event-ID as an HTTP header rather
+    # than as a query param. The local desktop app uses native EventSource for
+    # SSE, so if we only honor ?last_event_id=... then auto-reconnect falls back
+    # to replaying from event 0, which can stall or desync the frontend on long
+    # generations. Prefer the explicit query param when provided, otherwise
+    # accept the standard header.
+    if last_event_id == 0:
+        header_value = request.headers.get("last-event-id")
+        if header_value:
+            try:
+                last_event_id = int(header_value)
+            except ValueError:
+                last_event_id = 0
+
     job = sm.get_job(stream_id)
 
     if job is None:

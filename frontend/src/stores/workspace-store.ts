@@ -29,6 +29,7 @@ interface WorkspaceStore {
   close: () => void;
   toggleSection: (section: string) => void;
   expandSection: (section: string) => void;
+  collapseSection: (section: string) => void;
   setTodos: (todos: WorkspaceTodo[]) => void;
   addWorkspaceFile: (file: WorkspaceFile) => void;
   setWorkspaceFiles: (files: WorkspaceFile[]) => void;
@@ -39,7 +40,11 @@ interface WorkspaceStore {
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   isOpen: false,
-  collapsedSections: {},
+  collapsedSections: {
+    progress: true,
+    files: true,
+    context: true,
+  },
   todos: [],
   workspaceFiles: [],
   scratchpadContent: "",
@@ -65,15 +70,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       },
     })),
 
-  setTodos: (todos) => set({ todos }),
+  collapseSection: (section) =>
+    set((s) => ({
+      collapsedSections: {
+        ...s.collapsedSections,
+        [section]: true,
+      },
+    })),
+
+  setTodos: (todos) => set({ todos, ...(todos.length > 0 ? { isOpen: true } : {}) }),
 
   addWorkspaceFile: (file) => {
     const { workspaceFiles } = get();
     if (workspaceFiles.some((f) => f.path === file.path)) return;
-    set({ workspaceFiles: [...workspaceFiles, file] });
+    set({ workspaceFiles: [...workspaceFiles, file], isOpen: true });
   },
 
-  setWorkspaceFiles: (files) => set({ workspaceFiles: files }),
+  setWorkspaceFiles: (files) => set({ workspaceFiles: files, ...(files.length > 0 ? { isOpen: true } : {}) }),
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
   setActiveWorkspacePath: (path) => set({ activeWorkspacePath: path && path !== "." ? path : null }),
 
@@ -82,7 +95,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       todos: [],
       workspaceFiles: [],
       scratchpadContent: "",
-      collapsedSections: {},
+      collapsedSections: {
+        progress: true,
+        files: true,
+        context: true,
+      },
       activeWorkspacePath: null,
+      isOpen: false,
     }),
 }));

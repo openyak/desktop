@@ -9,9 +9,10 @@ interface MessageActionsProps {
   content: string;
   onRegenerate?: () => void;
   activityData?: ActivityData | null;
+  activityKey?: string;
 }
 
-export function MessageActions({ content, onRegenerate, activityData }: MessageActionsProps) {
+export function MessageActions({ content, onRegenerate, activityData, activityKey }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState<"up" | "down" | null>(null);
   const toggleForMessage = useActivityStore((s) => s.toggleForMessage);
@@ -71,10 +72,10 @@ export function MessageActions({ content, onRegenerate, activityData }: MessageA
       )}
 
       {/* Activity */}
-      {activityData && (
+      {activityData && activityKey && (
         <button
           type="button"
-          onClick={() => toggleForMessage(activityData)}
+          onClick={() => toggleForMessage(activityKey, activityData)}
           className="flex items-center justify-center h-7 w-7 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
           aria-label="View activity"
         >

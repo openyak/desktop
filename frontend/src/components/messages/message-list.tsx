@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useEffect, useCallback, useState } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useScrollAnchor } from "@/hooks/use-scroll-anchor";
@@ -28,6 +28,15 @@ function groupMessages(messages: MessageResponse[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   let assistantBatch: MessageResponse[] = [];
 
+  const isStandaloneAssistantMessage = (msg: MessageResponse) => {
+    const data = msg.data as Record<string, unknown>;
+    return data.role === "assistant" && (
+      data.summary === true ||
+      data.system === true ||
+      msg.parts.some((part) => part.data.type === "compaction")
+    );
+  };
+
   const flushBatch = () => {
     if (assistantBatch.length > 0) {
       groups.push({ kind: "assistant", messages: assistantBatch });
@@ -37,6 +46,11 @@ function groupMessages(messages: MessageResponse[]): MessageGroup[] {
 
   for (const msg of messages) {
     if (msg.data.role === "assistant") {
+      if (isStandaloneAssistantMessage(msg)) {
+        flushBatch();
+        groups.push({ kind: "assistant", messages: [msg] });
+        continue;
+      }
       assistantBatch.push(msg);
     } else if (
       msg.data.role === "user" &&
@@ -122,13 +136,13 @@ export function MessageList({
       const timer = setTimeout(() => setShowStreamingFallback(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [isGenerating]);
+  }, [isGenerating, messages.length]);
 
   useEffect(() => {
     if (showStreamingFallback && (messages?.length ?? 0) > prevMessageCountRef.current) {
       setShowStreamingFallback(false);
     }
-  }, [messages?.length, showStreamingFallback]);
+  }, [messages.length, showStreamingFallback]);
 
   // Reverse infinite scroll: observe top sentinel to load older messages
   useEffect(() => {
@@ -209,6 +223,12 @@ export function MessageList({
   // The shell message only exists after the backend created it (streamId is set).
   // During beginSending (streamId is null), we must NOT hide the previous response.
   const hasActiveStream = !!streamId;
+  const hasVisibleStreamingReplacement = useMemo(() => {
+    if (streamingText.trim() || streamingReasoning.trim()) return true;
+    return streamingParts.some(
+      (part) => part.type !== "step-start" && part.type !== "step-finish",
+    );
+  }, [streamingParts, streamingReasoning, streamingText]);
 
   // Don't show the optimistic user bubble if the DB-fetched messages already
   // contain a matching user message. This prevents duplicates after navigating
@@ -243,7 +263,7 @@ export function MessageList({
               <div className="mx-auto max-w-3xl xl:max-w-4xl">
                 <div className="flex justify-end">
                   <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl bg-[var(--user-bubble-bg)] px-4 py-2.5 shadow-[var(--shadow-sm)] border border-[var(--border-default)]">
-                    <div className="text-[15px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
+                    <div className="text-[13px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
                       {pendingUserText}
                     </div>
                     {pendingAttachments && pendingAttachments.length > 0 && (
@@ -351,7 +371,25 @@ export function MessageList({
               // Check if any message in the group is new
               const groupIsNew = group.messages.some((m) => newMessageIds.has(m.id));
 
-              if ((hasActiveStream || showStreamingFallback) && isLastOverall && !showPendingBubble) {
+              if (
+                (hasActiveStream || showStreamingFallback) &&
+                hasVisibleStreamingReplacement &&
+                isLastOverall &&
+                !showPendingBubble
+              ) {
+                // Keep earlier persisted assistant steps visible while the
+                // latest assistant message is still streaming. Previously we
+                // hid the entire final assistant batch, which also erased
+                // already-committed text from earlier steps in the same turn.
+                if (group.messages.length > 1) {
+                  return (
+                    <AssistantMessageGroup
+                      key={`${group.messages[0].id}-persisted`}
+                      messages={group.messages.slice(0, -1)}
+                      isNew={groupIsNew}
+                    />
+                  );
+                }
                 return null;
               }
 
@@ -382,7 +420,7 @@ export function MessageList({
                     }}
                   >
                     <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl bg-[var(--user-bubble-bg)] px-4 py-2.5 shadow-[var(--shadow-sm)] border border-[var(--border-default)]">
-                      <div className="text-[15px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
+                      <div className="text-[13px] text-[var(--text-primary)] whitespace-pre-wrap break-words leading-relaxed">
                         {pendingUserText}
                       </div>
                       {pendingAttachments && pendingAttachments.length > 0 && (

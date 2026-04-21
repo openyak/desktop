@@ -2,13 +2,11 @@
 
 import { useState } from "react";
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   Loader2,
   Plus,
-  Plug,
   RotateCw,
   Sparkles,
   Unplug,
@@ -16,7 +14,6 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/lib/api";
@@ -829,4 +826,3 @@ function PluginDetailPanel({ name }: { name: string }) {
     </div>
   );
 }
-

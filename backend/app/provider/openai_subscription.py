@@ -42,6 +42,12 @@ _SUBSCRIPTION_MODELS: list[dict[str, Any]] = [
             "max_context": 1_050_000,
             "max_output": 128_000,
         },
+        "metadata": {
+            # The advertised GPT-5.4 window is large, but the interactive Codex
+            # experience compacts much earlier. Use the smaller effective window
+            # for UI/compaction decisions while preserving the raw capability.
+            "effective_context_window": 258_000,
+        },
     },
     {
         "id": "gpt-5.3-codex",
@@ -215,6 +221,7 @@ class OpenAISubscriptionProvider(BaseProvider):
                 provider_id=PROVIDER_ID,
                 capabilities=ModelCapabilities(**m["capabilities"]),
                 pricing=ModelPricing(prompt=0.0, completion=0.0),
+                metadata=dict(m.get("metadata", {})),
             )
             for m in _SUBSCRIPTION_MODELS
         ]

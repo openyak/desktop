@@ -24,6 +24,34 @@ IMAGE_TOKEN_ESTIMATE = 512  # Approximate tokens for an image_url content block
 CHARS_PER_TOKEN = 4  # Average characters per token for rough estimation
 MIN_RESERVED_TOKENS = 2048  # Minimum tokens reserved for system overhead
 RESERVED_CONTEXT_RATIO = 0.08  # Fraction of model context reserved for overhead
+MIN_PARTIAL_MESSAGE_CHARS = 2_048  # Smallest useful tail/head slice to preserve
+EFFECTIVE_CONTEXT_RATIO = 0.33  # Safe operating window before proactive compaction
+
+
+def compute_effective_context_window(
+    max_context: int | None,
+    explicit_effective: int | None = None,
+) -> int | None:
+    """Compute the effective context window used for UX/compaction decisions."""
+    if isinstance(explicit_effective, int) and explicit_effective > 0:
+        if isinstance(max_context, int) and max_context > 0:
+            return min(explicit_effective, max_context)
+        return explicit_effective
+
+    if isinstance(max_context, int) and max_context > 0:
+        return max(1, int(max_context * EFFECTIVE_CONTEXT_RATIO))
+    return None
+
+
+def get_effective_context_window(model_info: Any | None) -> int | None:
+    """Return the effective context window for budgeting/compaction decisions."""
+    if model_info is None:
+        return None
+
+    max_context = getattr(getattr(model_info, "capabilities", None), "max_context", None)
+    metadata = getattr(model_info, "metadata", None) or {}
+    effective = metadata.get("effective_context_window")
+    return compute_effective_context_window(max_context, effective)
 
 
 def is_jwt_expired(token: str, margin_seconds: int = 60) -> bool:
@@ -134,9 +162,18 @@ def sanitize_llm_messages_for_request(
     # Fix dangling tool calls before any other processing
     messages = patch_dangling_tool_calls(messages)
 
-    # Dynamic char budget based on model context window
+    # Dynamic char budget based on model context window.
+    #
+    # The old implementation hard-capped large-context models at 500k chars.
+    # For GPT-5.4-class 1M-token windows, that caused history to be silently
+    # dropped long before reactive/full compaction could ever kick in.
+    # Keep the fallback floor for unknown models, but let large-context models
+    # use a proportionate budget so context can accumulate normally.
     if model_max_context:
-        max_request_chars = min(int(model_max_context * 3.5), 500_000)
+        max_request_chars = max(
+            _cfg().max_request_context_chars,
+            int(model_max_context * 3.5),
+        )
     else:
         max_request_chars = _cfg().max_request_context_chars  # 160k fallback
 
@@ -155,6 +192,13 @@ def sanitize_llm_messages_for_request(
                 m["content"] = trim_for_context(
                     content, _cfg().max_assistant_content_chars, "assistant content"
                 )
+            elif role == "user" and len(content) > max_request_chars:
+                # A single pasted wall of text should not evict the entire
+                # previous conversation. Trim it to the model-scaled request
+                # budget so earlier context still has a chance to survive.
+                m["content"] = trim_for_context(
+                    content, max_request_chars, "user content"
+                )
         sanitized.append(m)
 
     total_chars = 0
@@ -171,10 +215,28 @@ def sanitize_llm_messages_for_request(
     for m in reversed(sanitized):
         c = m.get("content")
         c_len = len(c) if isinstance(c, str) else 0
-        if running + c_len > max_request_chars and trimmed:
+        if running + c_len <= max_request_chars:
+            trimmed.append(m)
+            running += c_len
             continue
-        trimmed.append(m)
-        running += c_len
+
+        remaining = max_request_chars - running
+        if not isinstance(c, str) or remaining < MIN_PARTIAL_MESSAGE_CHARS:
+            if not trimmed:
+                trimmed.append(m)
+                running += c_len
+            continue
+
+        role = str(m.get("role", ""))
+        kind = {
+            "tool": "tool output",
+            "assistant": "assistant content",
+            "user": "user content",
+        }.get(role, "message")
+        partial = dict(m)
+        partial["content"] = trim_for_context(c, remaining, kind)
+        trimmed.append(partial)
+        running += len(partial["content"])
     trimmed.reverse()
 
     logger.warning(

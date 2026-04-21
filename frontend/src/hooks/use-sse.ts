@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { isPreviewableFile, artifactTypeFromExtension, languageFromExtension } from "@/lib/artifacts";
 import type { SessionResponse } from "@/types/session";
 import type { ArtifactType } from "@/types/artifact";
+import type { PaginatedMessages } from "@/types/message";
 
 // ─── Module-level state ───
 // Persisted across component mounts to survive React navigation.
@@ -125,6 +126,105 @@ export function useSSE(streamId: string | null) {
       });
       reasoningBufferRef.current = reasoningBuffer;
 
+      const waitForNextPaint = () =>
+        new Promise<void>((r) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => r())),
+        );
+
+      const canFinalizeFromCache = (sessionId: string) => {
+        const data = queryClient.getQueryData<InfiniteData<PaginatedMessages>>(
+          queryKeys.messages.list(sessionId),
+        );
+        const latestMessage = data?.pages.at(-1)?.messages.at(-1);
+        if (!latestMessage || latestMessage.data.role !== "assistant") return false;
+
+        const hasTerminalStepFinish = latestMessage.parts.some((part) => {
+          if (part.data.type !== "step-finish") return false;
+          return part.data.reason !== "tool_use";
+        });
+
+        return hasTerminalStepFinish;
+      };
+
+      const canFinalizeFromPayload = (messages: PaginatedMessages | null | undefined) => {
+        const latestMessage = messages?.messages.at(-1);
+        if (!latestMessage || latestMessage.data.role !== "assistant") return false;
+
+        return latestMessage.parts.some((part) => {
+          if (part.data.type !== "step-finish") return false;
+          return part.data.reason !== "tool_use";
+        });
+      };
+
+      const finishFromDatabase = async (sessionId: string) => {
+        reasoningBuffer.flush();
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.list(sessionId),
+        });
+        await waitForNextPaint();
+
+        // Do not finalize from DB while the backend still reports an active
+        // generation for this session. Without this guard, an intermediate
+        // assistant message that happens to end with a terminal-looking
+        // step-finish can prematurely tear down the streaming UI while the
+        // same stream continues with more tool calls / follow-up steps.
+        try {
+          const activeJobs = await api.get<Array<{ stream_id: string; session_id: string }>>(
+            API.CHAT.ACTIVE,
+          );
+          const currentStreamId = store.getState().streamId;
+          const stillActive = activeJobs.some(
+            (job) =>
+              job.session_id === sessionId &&
+              (!currentStreamId || job.stream_id === currentStreamId),
+          );
+          if (stillActive) return false;
+        } catch {
+          // If the active-job check fails, fall back to the DB heuristic below.
+        }
+
+        if (!canFinalizeFromCache(sessionId)) {
+          // Hard fallback: read the latest message page directly from the API.
+          // Relying only on React Query invalidation is too soft here — if the
+          // cache doesn't update in time, the UI can remain stuck in
+          // "finalizing" even though the backend has already persisted a
+          // terminal assistant message and dropped out of /chat/active.
+          try {
+            const latestPage = await api.get<PaginatedMessages>(API.MESSAGES.LIST(sessionId, 50, -1));
+            queryClient.setQueryData<InfiniteData<PaginatedMessages>>(
+              queryKeys.messages.list(sessionId),
+              (old) => {
+                if (!old) {
+                  return {
+                    pages: [latestPage],
+                    pageParams: [-1],
+                  };
+                }
+                return {
+                  ...old,
+                  pages: [...old.pages.slice(0, -1), latestPage],
+                };
+              },
+            );
+            if (!canFinalizeFromPayload(latestPage)) return false;
+          } catch {
+            return false;
+          }
+        }
+
+        store.getState().finishGeneration();
+        connectionStore.getState().setStatus("idle");
+        const workspace = useWorkspaceStore.getState();
+        if (
+          workspace.todos.length > 0 &&
+          workspace.todos.every((todo) => todo.status === "completed")
+        ) {
+          workspace.collapseSection("progress");
+        }
+        queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+        return true;
+      };
+
       console.log("[SSE] Creating SSEClient for stream:", streamId, "lastEventId:", persistedLastEventId);
 
       const client = new SSEClient({
@@ -150,12 +250,8 @@ export function useSSE(streamId: string | null) {
             (async () => {
               try {
                 if (sessionId) {
-                  await queryClient.invalidateQueries({
-                    queryKey: queryKeys.messages.list(sessionId),
-                  });
-                  await new Promise<void>((r) =>
-                    requestAnimationFrame(() => requestAnimationFrame(() => r())),
-                  );
+                  const finished = await finishFromDatabase(sessionId);
+                  if (finished) return;
                 }
               } finally {
                 store.getState().finishGeneration();
@@ -172,21 +268,35 @@ export function useSSE(streamId: string | null) {
       store.getState().setModelLoading(true);
     });
 
+    // Terminal step-finish can occasionally race with the next step's events.
+    // Debounce terminalization so a subsequent tool/step event keeps the
+    // streaming shell alive instead of collapsing the response mid-run.
+    let stepFinishTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelPendingStepFinish = () => {
+      if (stepFinishTimer) {
+        clearTimeout(stepFinishTimer);
+        stepFinishTimer = null;
+      }
+    };
+
     // Text streaming
     client.on(SSE_EVENTS.TEXT_DELTA, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       if (store.getState().isModelLoading) store.getState().setModelLoading(false);
       if (data.text) store.getState().appendTextDelta(data.text);
     });
 
     client.on(SSE_EVENTS.REASONING_DELTA, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       if (data.text) reasoningBuffer.push(data.text);
     });
 
     // Tool lifecycle
     client.on(SSE_EVENTS.TOOL_START, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       if (data.tool && data.call_id) {
         store.getState().addToolStart(
           data.tool,
@@ -237,6 +347,7 @@ export function useSSE(streamId: string | null) {
 
     client.on(SSE_EVENTS.TOOL_RESULT, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       if (data.call_id) {
         store.getState().setToolResult(
           data.call_id,
@@ -299,6 +410,7 @@ export function useSSE(streamId: string | null) {
 
     client.on(SSE_EVENTS.TOOL_ERROR, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       if (data.call_id) {
         store.getState().setToolError(data.call_id, data.output ?? data.error_message ?? "Error");
       }
@@ -307,13 +419,13 @@ export function useSSE(streamId: string | null) {
     // Step lifecycle
     client.on(SSE_EVENTS.STEP_START, (data, id) => {
       persistedLastEventId = id;
+      cancelPendingStepFinish();
       store.getState().addStepStart(data.step ?? 0);
     });
 
     // Safety net: if the agent loop finished (terminal step_finish) but DONE
-    // never arrives (e.g., lost due to network issues), force-finish after 30s.
-    let stepFinishTimer: ReturnType<typeof setTimeout> | null = null;
-
+    // never arrives (e.g., lost due to network issues), recover from DB first,
+    // then fall back to a delayed finish if needed.
     client.on(SSE_EVENTS.STEP_FINISH, (data, id) => {
       persistedLastEventId = id;
       store.getState().addStepFinish(
@@ -322,27 +434,39 @@ export function useSSE(streamId: string | null) {
         data.cost ?? 0,
       );
 
-      // Terminal step_finish (not tool_use/tool_calls) means the agent loop is done.
-      // Start a safety timer in case DONE is never received.
-      const isToolStep = data.reason === "tool_use" || data.reason === "tool_calls";
-      if (data.reason && !isToolStep) {
-        if (stepFinishTimer) clearTimeout(stepFinishTimer);
+      const terminalReasons = new Set(["stop", "length", "error", "aborted"]);
+      const isTerminalStep = terminalReasons.has(data.reason ?? "");
+      if (isTerminalStep) {
+        cancelPendingStepFinish();
+        const sid = store.getState().sessionId;
         stepFinishTimer = setTimeout(async () => {
+          stepFinishTimer = null;
+          if (!store.getState().isGenerating) return;
+
+          // First, try a short debounced DB recovery. This prevents premature
+          // teardown when a bogus terminal reason is immediately followed by a
+          // new step-start/tool event.
+          if (sid) {
+            const finished = await finishFromDatabase(sid);
+            if (finished) {
+              client.close();
+              return;
+            }
+          }
+
+          // If DONE is still missing after the debounce, keep the original
+          // hard safety net so truly terminal runs do not hang forever.
+          stepFinishTimer = setTimeout(async () => {
+            stepFinishTimer = null;
           if (store.getState().isGenerating) {
             console.warn("SSE safety net: forcing finishGeneration after step_finish timeout");
-            reasoningBuffer.flush();
-            const sid = store.getState().sessionId;
-            // Refetch DB messages BEFORE clearing streaming state,
-            // matching the DONE handler pattern. Otherwise the response
-            // appears blank until the next refetch cycle.
             try {
               if (sid) {
-                await queryClient.invalidateQueries({
-                  queryKey: queryKeys.messages.list(sid),
-                });
-                await new Promise<void>((r) =>
-                  requestAnimationFrame(() => requestAnimationFrame(() => r())),
-                );
+                const finished = await finishFromDatabase(sid);
+                if (finished) {
+                  client.close();
+                  return;
+                }
               }
             } finally {
               store.getState().finishGeneration();
@@ -350,13 +474,11 @@ export function useSSE(streamId: string | null) {
             }
             client.close();
           }
-        }, 30_000);
+          }, 8_000);
+        }, 1_200);
       } else {
         // Non-terminal step (tool_use) — clear any pending safety timer
-        if (stepFinishTimer) {
-          clearTimeout(stepFinishTimer);
-          stepFinishTimer = null;
-        }
+        cancelPendingStepFinish();
       }
     });
 
@@ -380,9 +502,12 @@ export function useSSE(streamId: string | null) {
       }
     });
 
-    client.on(SSE_EVENTS.COMPACTED, (_data, id) => {
+    client.on(SSE_EVENTS.COMPACTED, (data, id) => {
       persistedLastEventId = id;
       store.getState().addCompaction(true);
+      if (data.summary_created) {
+        toast.success("Context compacted");
+      }
     });
 
     // Interactive: Permission
@@ -498,27 +623,25 @@ export function useSSE(streamId: string | null) {
     });
 
     // Desync — backend dropped events due to subscriber queue overflow.
-    // Clear stale streaming state, then refetch messages from DB.
+    // Refetch messages from DB, but keep the current streaming shell alive until
+    // we have something better to show. Clearing first causes visible blank gaps.
     client.on(SSE_EVENTS.DESYNC, (_data, id) => {
       persistedLastEventId = id;
-      store.getState().clearStreamingContent();
       const sessionId = store.getState().sessionId;
       if (sessionId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(sessionId) });
       }
     });
 
-    client.on(SSE_EVENTS.COMPACTION_ERROR, () => {
-      toast.warning("Context compression failed. Consider starting a new chat.");
+    client.on(SSE_EVENTS.COMPACTION_ERROR, (data, id) => {
+      persistedLastEventId = id;
+      toast.warning(data.error_message || "Context compression failed. Consider starting a new chat.");
     });
 
     // Completion
     client.on(SSE_EVENTS.DONE, async (_data, id) => {
       persistedLastEventId = id;
-      if (stepFinishTimer) {
-        clearTimeout(stepFinishTimer);
-        stepFinishTimer = null;
-      }
+      cancelPendingStepFinish();
       reasoningBuffer.flush();
       const sessionId = store.getState().sessionId;
 
@@ -528,14 +651,7 @@ export function useSSE(streamId: string | null) {
       // where the response text disappears.
       try {
         if (sessionId) {
-          await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(sessionId) });
-          // Let React render the refetched DB messages before unmounting
-          // StreamingMessage. Without this double-rAF, there's a 1-frame
-          // gap where neither the streaming component nor the DB-fetched
-          // component is visible, producing a blank flash.
-          await new Promise<void>((r) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => r())),
-          );
+          await finishFromDatabase(sessionId);
         }
       } finally {
         store.getState().finishGeneration();
@@ -556,6 +672,9 @@ export function useSSE(streamId: string | null) {
 
       // Refetch sessions to pick up the title (set synchronously before DONE now)
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
+      if (_sid) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.sessions.detail(_sid) });
+      }
 
       // Refresh billing balance from OpenYak proxy after each generation
       const auth = useAuthStore.getState();
@@ -603,10 +722,7 @@ export function useSSE(streamId: string | null) {
       // before clearing streaming state, same as DONE handler.
       try {
         if (sessionId) {
-          await queryClient.invalidateQueries({ queryKey: queryKeys.messages.list(sessionId) });
-          await new Promise<void>((r) =>
-            requestAnimationFrame(() => requestAnimationFrame(() => r())),
-          );
+          await finishFromDatabase(sessionId);
         }
       } finally {
         store.getState().finishGeneration();
@@ -619,6 +735,7 @@ export function useSSE(streamId: string | null) {
             queryKey: queryKeys.messages.list(sessionId),
           });
         }, 500);
+        queryClient.invalidateQueries({ queryKey: queryKeys.sessions.detail(sessionId) });
       }
       client.close();
     };
@@ -655,24 +772,18 @@ export function useSSE(streamId: string | null) {
           return;
         }
         if (lastEventTimestamp > 0 && Date.now() - lastEventTimestamp > IDLE_RECOVERY_MS) {
-          console.warn("SSE idle recovery: no events for 60s, forcing finishGeneration");
-          clearInterval(idleCheckTimer);
-          reasoningBuffer.flush();
+          console.warn("SSE idle recovery: no events for 60s, attempting DB recovery");
           const sid = store.getState().sessionId;
-          try {
-            if (sid) {
-              await queryClient.invalidateQueries({
-                queryKey: queryKeys.messages.list(sid),
-              });
-              await new Promise<void>((r) =>
-                requestAnimationFrame(() => requestAnimationFrame(() => r())),
-              );
+          if (sid) {
+            const finished = await finishFromDatabase(sid);
+            if (finished) {
+              clearInterval(idleCheckTimer);
+              client.close();
+              return;
             }
-          } finally {
-            store.getState().finishGeneration();
-            connectionStore.getState().setStatus("idle");
           }
-          client.close();
+          lastEventTimestamp = Date.now();
+          client.checkHealth();
         }
       }, IDLE_CHECK_INTERVAL_MS);
 

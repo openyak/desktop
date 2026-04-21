@@ -29,6 +29,13 @@ class PromptResponse(BaseModel):
     session_id: str
 
 
+class CompactRequest(BaseModel):
+    """Start a manual compaction stream for an existing session."""
+
+    session_id: str
+    model_id: str | None = None
+
+
 class EditAndResendRequest(BaseModel):
     """Edit a user message and re-generate from that point."""
 

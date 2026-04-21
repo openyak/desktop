@@ -108,3 +108,8 @@ export function looksLikeFilePath(text: string): boolean {
   // Rejects: single words without extension, sentences, etc.
   return /^\.?\w[\w.-]*\.\w{1,10}$/.test(text);
 }
+
+/** Check whether a file path is absolute on POSIX or Windows. */
+export function isAbsoluteFilePath(filePath: string): boolean {
+  return /^(\/|[A-Za-z]:[\\/]|\\\\)/.test(filePath);
+}

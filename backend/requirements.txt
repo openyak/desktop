@@ -1,4 +1,4 @@
-# Muse Backend — pinned production dependencies
+# OpenYak Backend — pinned production dependencies
 # Generated from local environment. Only packages actually used by the app.
 
 # ── Web Framework ────────────────────────────────────────────────────────

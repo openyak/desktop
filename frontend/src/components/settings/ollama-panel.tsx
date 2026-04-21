@@ -13,7 +13,7 @@ import { ModelLibrary } from "./ollama/ollama-library";
 import type { OllamaRuntimeStatus } from "./ollama/types";
 
 export function OllamaPanel() {
-  const { t } = useTranslation("settings");
+  useTranslation("settings");
   const qc = useQueryClient();
   const { setActiveProvider } = useSettingsStore();
 

@@ -9,10 +9,12 @@ export type ChainItem =
   | { type: "tool"; data: ToolPart };
 
 export interface ActivityData {
+  sourceKey?: string;
   reasoningTexts: string[];
   toolParts: ToolPart[];
   thinkingDuration?: number;
   stepParts: (StepStartPart | StepFinishPart)[];
+  hasVisibleOutput?: boolean;
   /** Ordered chain of reasoning + tool items (preserves execution order). */
   chain: ChainItem[];
 }
@@ -36,16 +38,19 @@ export function computeDuration(data: ActivityData): number | undefined {
 
 interface ActivityStore {
   isOpen: boolean;
+  activeKey: string | null;
   activeData: ActivityData | null;
-  openForMessage: (data: ActivityData) => void;
-  toggleForMessage: (data: ActivityData) => void;
+  openForMessage: (key: string, data: ActivityData) => void;
+  toggleForMessage: (key: string, data: ActivityData) => void;
+  refreshForMessage: (key: string, data: ActivityData) => void;
   close: () => void;
 }
 
 export const useActivityStore = create<ActivityStore>((set, get) => ({
   isOpen: false,
+  activeKey: null,
   activeData: null,
-  openForMessage: (data) => {
+  openForMessage: (key, data) => {
     // Mutual exclusion: close artifact panel when activity opens
     try {
       const { useArtifactStore } = require("@/stores/artifact-store");
@@ -60,12 +65,12 @@ export const useActivityStore = create<ActivityStore>((set, get) => ({
     } catch {
       // Plan review store may not be available during SSR
     }
-    set({ isOpen: true, activeData: data });
+    set({ isOpen: true, activeKey: key, activeData: data });
   },
-  toggleForMessage: (data) => {
-    const { isOpen } = get();
-    if (isOpen) {
-      set({ isOpen: false });
+  toggleForMessage: (key, data) => {
+    const { isOpen, activeKey } = get();
+    if (isOpen && activeKey === key) {
+      set({ isOpen: false, activeKey: null });
     } else {
       // Mutual exclusion: close artifact panel
       try {
@@ -81,8 +86,14 @@ export const useActivityStore = create<ActivityStore>((set, get) => ({
       } catch {
         // Plan review store may not be available during SSR
       }
-      set({ isOpen: true, activeData: data });
+      set({ isOpen: true, activeKey: key, activeData: data });
     }
   },
-  close: () => set({ isOpen: false }),
+  refreshForMessage: (key, data) => {
+    const { isOpen, activeKey } = get();
+    if (isOpen && activeKey === key) {
+      set({ activeData: data });
+    }
+  },
+  close: () => set({ isOpen: false, activeKey: null }),
 }));

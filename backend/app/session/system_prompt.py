@@ -95,6 +95,10 @@ def build_system_prompt(
     if workspace_memory_section:
         dynamic_parts.append(workspace_memory_section)
 
+    skills_info = _skills_awareness_section()
+    if skills_info:
+        dynamic_parts.append(skills_info)
+
     # Environment info (timestamp changes every minute)
     env_info = _environment_section(directory, workspace=workspace, fts_status=fts_status)
     dynamic_parts.append(env_info)
@@ -135,6 +139,13 @@ When creating new files and the user does not specify a location, \
 place them in: {output_dir}
 This directory is auto-created for you. Use it to keep generated files organized.
 If the user explicitly specifies a different path (within the workspace), use that instead."""
+    else:
+        section += f"""
+
+# File Reference Format
+You are not restricted to a workspace for this session.
+When referencing local files in your response, prefer absolute paths rooted from the working directory: {cwd}
+Do not return relative paths like `src/main.py` when an absolute path is available."""
 
     if fts_status:
         status = fts_status.get("status", "unknown")
@@ -180,6 +191,47 @@ def _load_project_instructions(directory: str | None) -> str | None:
                 continue
 
     return None
+
+
+def _skills_awareness_section() -> str | None:
+    """Return a compact summary of currently enabled skills.
+
+    This intentionally duplicates a small amount of information from the skill
+    tool description because many models route better when relevant capabilities
+    are surfaced in the system prompt itself.
+    """
+    try:
+        from app.dependencies import get_skill_registry
+
+        registry = get_skill_registry()
+        active = sorted(registry.active_skills(), key=lambda s: s.name.lower())
+    except Exception:
+        return None
+
+    if not active:
+        return None
+
+    shown = active[:12]
+    remaining = len(active) - len(shown)
+
+    lines = [
+        "# Skill Routing",
+        "If the task matches one of the skills below, call the `skill` tool before major work.",
+        "Use skills for specialised workflows or output-generation tasks. Do not load a skill just to read a file.",
+        "",
+        "Currently available skills:",
+    ]
+
+    for skill in shown:
+        desc = (skill.description or "").strip()
+        if len(desc) > 90:
+            desc = desc[:87] + "..."
+        lines.append(f"- {skill.name}: {desc}")
+
+    if remaining > 0:
+        lines.append(f"- (and {remaining} more available via the `skill` tool)")
+
+    return "\n".join(lines)
 
 
 

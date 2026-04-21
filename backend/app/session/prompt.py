@@ -375,7 +375,10 @@ class SessionPrompt:
             SessionProcessor,
             _delete_empty_assistant_messages,
         )
-        from app.session.utils import sanitize_llm_messages_for_request as _sanitize_llm_messages_for_request
+        from app.session.utils import (
+            get_effective_context_window as _get_effective_context_window,
+            sanitize_llm_messages_for_request as _sanitize_llm_messages_for_request,
+        )
         from app.session.compaction import run_compaction, should_compact
         from app.session.manager import create_message as _create_message, get_message_history_for_llm
         from app.session.microcompact import microcompact_messages, apply_tool_result_budget, context_collapse
@@ -452,7 +455,7 @@ class SessionPrompt:
                 llm_messages,
                 session_id=self.job.session_id,
                 model_max_context=(
-                    self.model_info.capabilities.max_context
+                    _get_effective_context_window(self.model_info)
                     if self.model_info
                     else None
                 ),

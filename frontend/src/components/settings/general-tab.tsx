@@ -12,11 +12,16 @@ import { TextPart } from "@/components/parts/text-part";
 export function GeneralTab() {
   const { t, i18n } = useTranslation('settings');
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [appVersion, setAppVersion] = useState("0.0.1");
   const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "available" | "up-to-date" | "downloading" | "error">("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!IS_DESKTOP) return;
@@ -55,7 +60,6 @@ export function GeneralTab() {
       if (!update) return;
       let totalLength = 0;
       let downloaded = 0;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await update.downloadAndInstall((event: any) => {
         if (event.event === "Started" && event.data.contentLength) {
           totalLength = event.data.contentLength;
@@ -94,7 +98,7 @@ export function GeneralTab() {
               key={value}
               onClick={() => setTheme(value)}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${
-                theme === value
+                mounted && theme === value
                   ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/5"
                   : "border-[var(--border-default)] hover:bg-[var(--surface-secondary)]"
               }`}
@@ -162,7 +166,7 @@ export function GeneralTab() {
                 localStorage.setItem("openyak-language", value);
               }}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${
-                i18n.language.startsWith(value)
+                mounted && i18n.language.startsWith(value)
                   ? "border-[var(--brand-primary)] bg-[var(--brand-primary)]/5"
                   : "border-[var(--border-default)] hover:bg-[var(--surface-secondary)]"
               }`}
