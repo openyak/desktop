@@ -6,6 +6,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), and this project
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-21
+
+### Added
+
+- **backend (channels):** New in-process `app/channels/` subsystem replaces the external Node.js OpenClaw gateway — async `MessageBus`, `BaseChannel` abstraction, `ChannelManager` router, plugin auto-discovery, and an `AgentAdapter` that bridges inbound messages straight into `run_generation()`. All 13 nanobot channels run natively inside the OpenYak process: Telegram, Discord, Slack, WhatsApp (with bundled Baileys Node bridge for QR login), WeChat, Feishu, DingTalk, WeCom, QQ, Email, Matrix, MoChat, WebSocket.
+- **backend (compaction):** Manual context compaction — `POST /chat/compact` and `POST /sessions/{id}/compact` with shared SSE/abort lifecycle, gated at ≥50% context usage. `compaction.py` returns a typed `CompactionResult`, supports a `visible_summary` mode (assistant-role with `summary: true`), and honors `job.abort_event` between phases.
+- **backend (context window):** `compute_effective_context_window` / `get_effective_context_window` — 33% safe operating ratio with per-model metadata override. GPT-5.4 declares a 258k effective window; `openyak-proxy` is treated as an aggregator with priority dedupe and populates effective windows on `ModelInfo.metadata`.
+- **backend (sessions):** `get_session_files` now reads tracked `SessionFile` rows first, with legacy fallbacks that scan `openyak_written/` and run a conservative path-recovery heuristic over old assistant text and tool output. `code_execute` snapshots the workspace before/after to expose `written_files` and tracks them as `SessionFile` rows.
+- **backend (streaming):** `streaming/manager.py` emits an explicit `DESYNC` event on SSE replay-buffer overflow instead of crashing on `QueueFull`; `chat.py` honors the `Last-Event-ID` HTTP header for native `EventSource` reconnect.
+- **backend (tests):** `test_processor_finish_reason.py` (step finish-reason normalization contract) and `test_utils.py` (large-context retention, partial-message trimming).
+- **frontend (sidebar redesign):** New `projects-toolbar.tsx` (collapse-all, add-project file picker, organize/sort popover), `search-command-dialog.tsx` (⌘/Ctrl+K palette with recents, FTS results, ⌘+1..5 jump), grouped Pinned → Projects → Chats virtualizer, slimmer session rows with relative timestamps that fade to a kebab on hover.
+- **frontend (sse & chat lifecycle):** DB-recovery finalization via `/chat/active` polling + direct messages refetch; debounced terminal step-finish (1.2s + 8s safety net, replacing the old 30s timeout); `DESYNC` no longer wipes streaming state; `COMPACTED` toast.
+- **frontend (chat ui):** `context-indicator.tsx` is now a clickable progress ring that triggers manual compaction with a rich tooltip. Assistant messages separate compaction parts from main content and rename streaming stages (Thinking / Working with tools / Finalizing). `text-part.tsx` upgrades file-path code spans to cards with filename + directory hint and resolves relative paths via the backend. `pptx-renderer.tsx` rewritten to use the new `SlideRenderer` API with a current-slide canvas + thumbnail strip.
+- **frontend (i18n):** New en/zh strings for projects/sort/organize, search palette, manual-compaction phases, context-window tooltip, streaming stage labels, recommended-actions heading, plural task counts, and access/action-mode rebrand.
+- **desktop (tauri):** Default window bumped to 1200×800 with `minWidth` 1024 so the `lg:block` sidebar is always visible on launch. Setup-phase size clamp in `lib.rs` overrides smaller dimensions restored by the window-state plugin from previous versions.
+
+### Changed
+
+- **backend (provider):** `provider/registry.py` treats `openyak-proxy` as an aggregator with priority deduping. `provider/openrouter.py` only injects the `openyak/best-free` virtual model on the proxy instance (renamed "Yak Free"). Build prompt rebranded "Muse" → "Yakyak/OpenYak" with an added `<skill_routing>` directive.
+- **backend (processor):** Step finish reasons normalized (`tool_calls` → `tool_use`, `"empty"` → non-terminal `tool_use`) and validated against the `StepFinishReason` literal. `step-finish` parts are emitted on stream errors; tool_use is forced when tool calls were issued.
+- **backend (session/manager):** Skips messages before the latest compaction summary when feeding history back to the LLM.
+- **backend (sanitizer):** `sanitize_llm_messages_for_request` no longer silently drops older turns when the budget overflows after partial-trim. Remaining messages keep their envelope (role, `tool_calls`, `tool_call_id`) and large string content collapses to a short `[<kind> truncated for context: …]` marker, preserving conversation shape for LLMs that require paired tool_call / tool_result messages.
+- **frontend (landing):** Simplified — removed random capability/starter shuffle and feature hints; honors `?directory=` for "Add new project"; surfaces two recommended actions.
+- **frontend (palette):** `globals.css` rebrand from "Pure Black & White" to a Codex-aligned palette (blue accent `#339CFF`, refined surfaces/borders, dark theme tokens).
+- **frontend (workspace):** Workspace section cards (progress, files, context) restyled with translucent rounded cards, badges, and previews. Defaults all sections collapsed but auto-opens the panel when todos/files arrive; collapses progress once all todos are completed.
+- **frontend (settings):** `providers-tab.tsx` wires provider activation to auto-select a matching model; removes the legacy single-key BYOK input.
+- **frontend (sidebar footer/nav):** Collapsed to a single Settings link (provider/balance UI removed); sidebar nav reduced to a search button that opens the palette.
+
+### Removed
+
+- **backend:** The entire `app/openclaw/` directory and every `openclaw_*` config setting. Channels are now built-in — no external gateway to install or manage.
+- **frontend:** OpenClaw gateway install/start/stop UI, hooks, types, and constants. Mobile settings switched from the deprecated hook to `useChannelStatus()`.
+
+### Fixed
+
+- **frontend (sidebar borders):** Removed right + footer borders for a seamless edge against the main content column.
+- **frontend (ci):** `npx tsc --noEmit` is now expected to pass locally before pushing. Three type errors slipped through on HEAD (`page.tsx` passing a stale `sessionId` prop, `message-list.tsx` direct cast to `Record<string, unknown>`, missing `summary_created` on `SSEEventData`) — all cleared.
+
 ## [1.0.8] - 2026-04-12
 
 ### Fixed
