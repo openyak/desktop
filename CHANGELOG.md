@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), and this project
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-04-22
+
+### Added
+
+- **frontend (artifacts):** PDF / DOCX / PPTX / XLSX renderers now pass the active workspace with every `CONTENT_BINARY` request so files resolve in the correct session context. The PDF renderer also supplies `cMapUrl` and `standardFontDataUrl` so CJK and standard fonts render correctly, and memoizes the `file` prop so resize doesn't re-fetch.
+- **frontend (build):** `postinstall` and `build` scripts copy pdfjs `cmaps/` and `standard_fonts/` into `public/`; `.gitignore` excludes the copied outputs.
+- **frontend (theming):** New `--sidebar-translucent-bg` token (88% alpha light / 20% alpha dark) consumed by `Sidebar` and `SettingsSidebar`, replacing the ad-hoc `/20` alpha. `appearance-injector` derives the token from the user's chosen background.
+
+### Changed
+
+- **frontend (panels):** `workspace-store.open/toggle` now closes Activity / Artifact / PlanReview panels, so side panels are mutually exclusive. The chat header toggles the Workspace panel based on *actually visible* state rather than raw `isOpen`, since overlay panels can cover it.
+- **frontend (sidebar motion):** Collapse/expand switched from tween to spring to match the side-panel animations.
+- **frontend (layout):** The main layout renders an opaque `surface-chat` backdrop behind the sidebar column so panel transitions no longer flash.
+- **frontend (chat polish):** Send button in `chat-actions` uses explicit color tokens so the disabled state stays legible in dark mode; the `context-indicator` tooltip is `pointer-events-none` so it never traps the cursor; "Create new" in automations now uses the outline button style.
+- **frontend (activity panel):** Dropped the left border and the vertical timeline connector line for a cleaner look.
+- **docs:** Security contact email updated.
+
+### Fixed
+
+- **frontend (activity summary):** Clicking "Done · N tool calls" was a silent no-op — `ActivitySummary.onClick` was gated on `data.sourceKey`, but `MessageContent` built `activityData` without one. `activityKey` is now threaded through `MessageContent` into `sourceKey`, and the chevron rotates when that message's activity panel is open.
+
 ## [1.1.1] - 2026-04-22
 
 ### Added
