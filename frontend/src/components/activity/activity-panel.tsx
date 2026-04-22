@@ -365,7 +365,7 @@ function ActivityPanelContent() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between h-12 px-4 shrink-0 border-b border-[var(--border-default)]">
+      <div className="flex items-center justify-between h-12 px-4 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             {t("activity")}
@@ -389,14 +389,6 @@ function ActivityPanelContent() {
       {/* Scrollable chain timeline */}
       <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-auto">
         <div className="relative space-y-4">
-          {/* Vertical connector line */}
-          {timelineItems.length > 0 && (
-            <div
-              className="absolute left-[7px] top-4 bottom-4 w-px bg-[var(--border-default)]"
-              aria-hidden="true"
-            />
-          )}
-
           {timelineItems.map((item, i) =>
             item.kind === "thinking-group" ? (
               <ThinkingGroup key={`thinking-${i}`} texts={item.texts} />
@@ -431,7 +423,7 @@ function ActivityPanelContent() {
 
         {/* Metrics */}
         {hasMetrics && (
-          <div className="border-t border-[var(--border-default)] pt-4 mt-6">
+          <div className="pt-4 mt-6">
             <h3 className="text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
               {t("metrics")}
             </h3>
@@ -480,7 +472,7 @@ export function ActivityPanel() {
   if (isDesktop) {
     return (
       <motion.aside
-        className="fixed inset-y-0 right-0 z-[35] flex flex-col bg-[var(--surface-primary)] border-l border-[var(--border-default)] overflow-hidden"
+        className="fixed inset-y-0 right-0 z-[35] flex flex-col bg-[var(--surface-primary)] overflow-hidden"
         style={{ width: ACTIVITY_PANEL_WIDTH, top: topOffset }}
         initial={{ x: "100%" }}
         animate={{ x: 0 }}

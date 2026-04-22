@@ -49,8 +49,13 @@ export function AutomationsTabContent() {
     <div className="space-y-4">
       {/* Action bar */}
       <div className="flex justify-end">
-        <Button size="sm" className="h-7 text-xs gap-1" onClick={() => setShowCreate(true)}>
-          <Plus className="h-3.5 w-3.5" />
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-ui-2xs px-2.5"
+          onClick={() => setShowCreate(true)}
+        >
+          <Plus className="h-3 w-3 mr-1" />
           {t("createNew")}
         </Button>
       </div>

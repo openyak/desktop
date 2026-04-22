@@ -23,9 +23,8 @@ export function ChatActions({ isBusy, canSend, onSend, onStop }: ChatActionsProp
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="default"
               size="icon"
-              className="h-8 w-8 rounded-full"
+              className="h-8 w-8 rounded-full bg-[var(--text-primary)] text-[var(--surface-primary)] hover:bg-[var(--text-primary)]/90 disabled:bg-[var(--text-tertiary)]/30 disabled:text-[var(--surface-primary)] disabled:opacity-100"
               onClick={isBusy ? onStop : onSend}
               disabled={!interactive}
               aria-label={isBusy ? t("stopAction") : t("sendAction")}

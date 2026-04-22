@@ -39,6 +39,9 @@
 
   /* Sidebar */
   --sidebar-bg: #F7F7F8;
+  /* Translucent bg over macOS vibrancy / unpredictable wallpapers. Light mode
+     needs high alpha so dark text stays readable regardless of what's behind. */
+  --sidebar-translucent-bg: rgba(247, 247, 248, 0.88);
   --sidebar-hover: #EEEEF0;
   --sidebar-active: #E7E9ED;
   --sidebar-active-shadow: 0 1px 2px rgba(26, 28, 31, 0.05);
@@ -134,8 +137,10 @@
 
   /* Sidebar */
   --sidebar-bg: #252525;
-  --sidebar-hover: #2D2D2D;
-  --sidebar-active: #3A3A3A;
+  /* Dark mode keeps the low-alpha vibrancy aesthetic (wallpaper shows through). */
+  --sidebar-translucent-bg: rgba(37, 37, 37, 0.20);
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active: rgba(255, 255, 255, 0.09);
   --sidebar-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   --sidebar-active-border: rgba(255, 255, 255, 0.04);
 

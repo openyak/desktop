@@ -11,6 +11,9 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useActivityStore } from "@/stores/activity-store";
+import { useArtifactStore } from "@/stores/artifact-store";
+import { usePlanReviewStore } from "@/stores/plan-review-store";
 import { useMessages } from "@/hooks/use-messages";
 import { useIsMacOS } from "@/hooks/use-platform";
 import {
@@ -44,7 +47,22 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
   const macDragProps = IS_DESKTOP && isMac ? { "data-tauri-drag-region": "" } : {};
   const [pdfLoading, setPdfLoading] = useState(false);
   const workspaceIsOpen = useWorkspaceStore((s) => s.isOpen);
-  const toggleWorkspace = useWorkspaceStore((s) => s.toggle);
+  const openWorkspace = useWorkspaceStore((s) => s.open);
+  const closeWorkspace = useWorkspaceStore((s) => s.close);
+  const activityIsOpen = useActivityStore((s) => s.isOpen);
+  const artifactIsOpen = useArtifactStore((s) => s.isOpen);
+  const planReviewIsOpen = usePlanReviewStore((s) => s.isOpen);
+  // Workspace is only "actually visible" when no overlay panel covers it.
+  const workspaceVisible =
+    workspaceIsOpen && !activityIsOpen && !artifactIsOpen && !planReviewIsOpen;
+  const handleToggleWorkspace = useCallback(() => {
+    if (workspaceVisible) {
+      closeWorkspace();
+    } else {
+      // openWorkspace() also closes any active overlay panel.
+      openWorkspace();
+    }
+  }, [workspaceVisible, openWorkspace, closeWorkspace]);
   const isGenerating = useChatStore((s) => s.isGenerating);
   const streamingParts = useChatStore((s) => s.streamingParts);
 
@@ -187,10 +205,10 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9"
-                aria-label={workspaceIsOpen ? t("hideWorkspace") : t("showWorkspace")}
-                onClick={toggleWorkspace}
+                aria-label={workspaceVisible ? t("hideWorkspace") : t("showWorkspace")}
+                onClick={handleToggleWorkspace}
               >
-                {workspaceIsOpen ? (
+                {workspaceVisible ? (
                   <PanelRightClose className="h-[18px] w-[18px]" />
                 ) : (
                   <PanelRightOpen className="h-[18px] w-[18px]" />
@@ -198,7 +216,7 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {workspaceIsOpen ? t("hideWorkspace") : t("showWorkspace")}
+              {workspaceVisible ? t("hideWorkspace") : t("showWorkspace")}
             </TooltipContent>
           </Tooltip>
         )}

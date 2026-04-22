@@ -223,7 +223,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const titleBarPadding = IS_DESKTOP && !isMac ? TITLE_BAR_HEIGHT : 0;
 
   return (
-    <div className="h-full overflow-hidden">
+    <div className="h-full overflow-hidden isolate">
+      {/* Opaque backdrop behind everything right of the sidebar.
+          Only the sidebar area stays transparent to preserve macOS vibrancy;
+          all other regions sit on solid surface-chat, eliminating any flash of
+          the root background during panel open/close animations. */}
+      <motion.div
+        aria-hidden="true"
+        className="fixed inset-y-0 right-0 -z-10 pointer-events-none bg-[var(--surface-chat)]"
+        initial={false}
+        animate={{ left: marginLeft }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+      />
+
       {/* Skip link for keyboard navigation */}
       <a
         href="#main-content"
@@ -315,16 +327,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             ? " rounded-tl-xl rounded-bl-xl border-l border-t border-b border-[var(--border-subtle)]"
             : ""
         }`}
-        style={{
-          paddingTop: titleBarPadding,
-          marginLeft,
-          marginRight,
-        }}
+        style={{ paddingTop: titleBarPadding }}
         initial={false}
-        animate={{
-          marginLeft,
-          marginRight
-        }}
+        animate={{ marginLeft, marginRight }}
         transition={{ type: "spring", damping: 30, stiffness: 300 }}
       >
         <ConnectionStatus />

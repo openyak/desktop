@@ -32,7 +32,7 @@ export function SettingsSidebar() {
   return (
     <aside
       aria-label="Settings sidebar"
-      className="sidebar-glass fixed inset-y-0 left-0 z-30 flex flex-col overflow-hidden bg-[var(--sidebar-bg)]/20 backdrop-blur-xl"
+      className="sidebar-glass fixed inset-y-0 left-0 z-30 flex flex-col overflow-hidden bg-[var(--sidebar-translucent-bg)] backdrop-blur-xl"
       style={{ width: sidebarWidth, top: topOffset }}
     >
       <SidebarResizeHandle />

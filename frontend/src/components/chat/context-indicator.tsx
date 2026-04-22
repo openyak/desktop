@@ -151,7 +151,7 @@ export function ContextIndicator({ sessionId }: ContextIndicatorProps) {
           )}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" align="end" sideOffset={8} className="w-[220px] rounded-lg border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-3 py-2.5 shadow-[var(--shadow-md)]">
+      <TooltipContent side="bottom" align="end" sideOffset={8} className="pointer-events-none w-[220px] rounded-lg border border-[var(--border-default)] bg-[var(--surface-tertiary)] px-3 py-2.5 shadow-[var(--shadow-md)]">
         <div className="flex flex-col items-center text-center space-y-2">
           <div className="w-full space-y-0.5">
             <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">{t('contextWindow')}</div>

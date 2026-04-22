@@ -116,6 +116,9 @@ function buildThemeDecls({
       `--surface-secondary: color-mix(in srgb, ${bg} 94%, ${fg ?? "#808080"} 6%);`,
       `--surface-tertiary: color-mix(in srgb, ${bg} 88%, ${fg ?? "#808080"} 12%);`,
       `--sidebar-bg: color-mix(in srgb, ${bg} 92%, ${fg ?? "#808080"} 8%);`,
+      // 88% alpha of the computed sidebar-bg — keeps light-theme sidebars readable
+      // against any wallpaper/vibrancy behind them. .dark rule overrides for dark themes.
+      `--sidebar-translucent-bg: color-mix(in srgb, color-mix(in srgb, ${bg} 92%, ${fg ?? "#808080"} 8%) 88%, transparent);`,
       `--sidebar-hover: color-mix(in srgb, ${bg} 86%, ${fg ?? "#808080"} 14%);`,
       `--sidebar-active: color-mix(in srgb, ${bg} 80%, ${fg ?? "#808080"} 20%);`,
       `--user-bubble-bg: color-mix(in srgb, ${bg} 90%, ${fg ?? "#808080"} 10%);`,
