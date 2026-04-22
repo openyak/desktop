@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in OpenYak, please report it responsibly.
 
-**Email:** [security@open-yak.com](mailto:security@open-yak.com)
+**Email:** [support@waxis.org](mailto:support@waxis.org)
 
 Please include:
 - Description of the vulnerability
