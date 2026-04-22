@@ -59,6 +59,6 @@ class TestBashTool:
     async def test_unicode_output(self, tool: BashTool):
         """Non-ASCII output should not be garbled."""
         result = await tool.execute(
-            {"command": 'python -c "print(\'hello world\')"'}, _make_ctx()
+            {"command": 'python3 -c "print(\'hello world\')"'}, _make_ctx()
         )
         assert "hello" in result.output

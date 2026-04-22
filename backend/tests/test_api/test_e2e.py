@@ -289,7 +289,7 @@ class TestMultiStepAgent:
 
 
 class TestDoomLoopDetection:
-    """Verify doom loop detection blocks infinite tool calling."""
+    """Verify loop detection blocks infinite tool calling."""
 
     @pytest.mark.asyncio
     async def test_doom_loop_blocked(
@@ -297,11 +297,12 @@ class TestDoomLoopDetection:
         e2e_agent_registry, e2e_tool_registry,
     ):
         """Prompt that could cause repeated identical calls → should be caught."""
-        # This is hard to reliably trigger with a real LLM, so we verify
-        # the detection mechanism works at the unit level instead
-        from app.session.processor import DOOM_LOOP_THRESHOLD
+        from app.session.loop_detection import LoopDetector
 
-        assert DOOM_LOOP_THRESHOLD == 3, "Doom loop threshold should be 3"
+        detector = LoopDetector(warn_threshold=2, hard_limit=3)
+        assert detector.check("s", "search", {"q": "x"}).action == "allow"
+        assert detector.check("s", "search", {"q": "x"}).action == "warn"
+        assert detector.check("s", "search", {"q": "x"}).action == "block"
 
 
 class TestStreamManager:
