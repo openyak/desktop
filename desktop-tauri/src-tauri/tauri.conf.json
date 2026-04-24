@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "OpenYak",
-        "width": 1200,
-        "height": 800,
+        "width": 1360,
+        "height": 840,
         "minWidth": 1024,
         "minHeight": 640,
         "decorations": true,
@@ -32,7 +32,7 @@
     ],
     "macOSPrivateApi": true,
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://ipc.localhost http://127.0.0.1:* https://*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* https://*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
     }
   },
   "bundle": {

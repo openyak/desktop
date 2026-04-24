@@ -101,19 +101,21 @@ export function resetBackendToken(): void {
 
 // Auto-register desktop backend event listeners
 if (IS_DESKTOP && typeof window !== "undefined") {
-  // Prefetch the session token so the first API call does not pay the IPC
-  // round-trip latency. Token load failures are non-fatal here — the next
-  // explicit getBackendToken() call will surface the error.
-  void getBackendToken().catch(() => {});
+  // Do NOT prefetch the session token at module load. The Tauri IPC
+  // scheme (ipc://localhost) is only considered a valid connect-src
+  // after the webview has completed its security handshake; invoking
+  // too early used to trip CSP (see v1.1.3 rollback) and, depending
+  // on the platform, poisoned the event channel as a side-effect.
+  // Instead, the token is fetched lazily on the first authenticated
+  // request — api.ts awaits getBackendToken() per call (the result
+  // is cached, so it only round-trips once).
 
   desktopAPI.onBackendRestart((newUrl) => {
     // Backend restart detected — URL may have changed and the session
     // token has definitely rotated (the new process writes a fresh one).
+    // Clear both caches; the next API call will re-fetch.
     resetBackendUrl(newUrl);
     resetBackendToken();
-    // Kick off a refetch so the next API call already has a fresh token
-    // cached, avoiding a window where requests race the IPC round trip.
-    void getBackendToken().catch(() => {});
   });
   desktopAPI.onBackendCrashLog((log) => {
     console.error(

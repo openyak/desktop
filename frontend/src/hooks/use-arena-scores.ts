@@ -21,6 +21,7 @@ interface RankingEntry {
 // Merged data from OpenRouter Benchmarks (Intelligence Index) & LLM Leaderboard (Popularity)
 const RANKING_DATA: RankingEntry[] = [
   // Both quality and popularity
+  { name: "GPT-5.5", score: 60.2, rank: 0 },
   { name: "Gemini 3.1 Pro Preview", score: 57.2, rank: 0 },
   { name: "Claude Opus 4.6", score: 53.0, rank: 7 },
   { name: "Claude Sonnet 4.6", score: 51.7, rank: 6 },
@@ -39,9 +40,14 @@ const RANKING_DATA: RankingEntry[] = [
   { name: "GPT-OSS 120B", score: 0, rank: 16 },
   { name: "Nemotron 3 Super", score: 0, rank: 14 },
   { name: "Hunter Alpha", score: 0, rank: 19 },
-  // Quality only
+  // Quality only — latest Intelligence Index refresh, new entries at
+  // the top with no popularity rank yet
+  { name: "Claude Opus 4.7", score: 57.3, rank: 0 },
+  { name: "Kimi K2.6", score: 53.9, rank: 0 },
+  { name: "MiMo V2.5 Pro", score: 53.8, rank: 0 },
   { name: "GPT-5.3 Codex", score: 53.6, rank: 0 },
   { name: "GLM 5.1", score: 51.4, rank: 0 },
+  { name: "GPT-5.2", score: 51.3, rank: 0 },
   { name: "Claude Opus 4.5", score: 49.7, rank: 0 },
   { name: "Grok 4.20", score: 48.5, rank: 0 },
   { name: "Gemini 3 Pro Preview", score: 48.4, rank: 0 },

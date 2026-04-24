@@ -101,7 +101,12 @@ export function HeaderModelDropdown() {
         const fallback = visibleModels.find((m) => isFreeModel(m));
         chosen = preferred ?? fallback ?? visibleModels[0];
       } else if (activeProvider === "chatgpt") {
-        const preferred = visibleModels.find((m) => m.id === "openai-subscription/gpt-5.4");
+        // Prefer the newest flagship (5.5), fall back to 5.4 if the user's
+        // subscription tier hasn't rolled it out yet, then to whatever the
+        // backend did return.
+        const preferred =
+          visibleModels.find((m) => m.id === "openai-subscription/gpt-5.5") ??
+          visibleModels.find((m) => m.id === "openai-subscription/gpt-5.4");
         chosen = preferred ?? visibleModels[0];
       } else {
         chosen = visibleModels[0];

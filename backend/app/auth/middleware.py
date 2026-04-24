@@ -170,6 +170,16 @@ class AuthMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # CORS preflight (OPTIONS) is never supposed to carry credentials —
+        # the browser intentionally strips them. Let the request pass
+        # through so ``CORSMiddleware`` can answer with the allow-headers /
+        # allow-methods set; if the preflight is denied the actual GET /
+        # POST that follows will be held back by the browser anyway, and
+        # our auth check runs on that real request.
+        if scope.get("method", "").upper() == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
         path = scope.get("path", "")
         if not _requires_auth(path):
             await self.app(scope, receive, send)

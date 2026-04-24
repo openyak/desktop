@@ -355,13 +355,15 @@ export function MessageList({
 
               // Assistant group — hide the entire last group during active
               // streaming ONLY if it belongs to the current generation.
-              // The StreamingMessage component handles rendering all accumulated
-              // content. Without this, a race condition can cause DB-fetched
-              // messages (with partially-populated parts) to render alongside
-              // the StreamingMessage, producing duplicate blocks.
+              // ``streamingParts`` in the chat-store accumulates every part
+              // seen during the turn (from ``beginSending`` through
+              // ``finishGeneration``), so the StreamingMessage below already
+              // renders the earlier persisted step-messages' content. Showing
+              // both here causes duplicate blocks with duplicate Sources
+              // footers and an overlapping tool-call timeline.
               //
-              // However, if `showPendingBubble` is true, the user just sent a
-              // new message that isn't yet in the DB cache — meaning the last
+              // If ``showPendingBubble`` is true, the user just sent a new
+              // message that isn't yet in the DB cache — meaning the last
               // assistant group is from a PREVIOUS turn. Don't hide it or the
               // previous AI response disappears when a follow-up is sent.
               const lastMsg = group.messages[group.messages.length - 1];
@@ -377,19 +379,6 @@ export function MessageList({
                 isLastOverall &&
                 !showPendingBubble
               ) {
-                // Keep earlier persisted assistant steps visible while the
-                // latest assistant message is still streaming. Previously we
-                // hid the entire final assistant batch, which also erased
-                // already-committed text from earlier steps in the same turn.
-                if (group.messages.length > 1) {
-                  return (
-                    <AssistantMessageGroup
-                      key={`${group.messages[0].id}-persisted`}
-                      messages={group.messages.slice(0, -1)}
-                      isNew={groupIsNew}
-                    />
-                  );
-                }
                 return null;
               }
 

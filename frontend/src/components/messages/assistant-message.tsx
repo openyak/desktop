@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, memo, useEffect } from "react";
+import { useState, useMemo, memo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { MessageContent } from "./message-content";
@@ -133,6 +133,15 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   const { t } = useTranslation("chat");
   const isModelLoading = useChatStore((s) => s.isModelLoading);
 
+  // Track whether this component mounted with no existing stream content.
+  // If it did, the fade-in is a genuine "new response appearing" cue. If the
+  // store already had parts/text/reasoning at mount time, this is a remount
+  // mid-stream (e.g. route swap from /c/new → /c/[id] after session creation)
+  // and the fade would flash the whole chat area like a page refresh.
+  const freshMountRef = useRef(
+    parts.length === 0 && !streamingText && !streamingReasoning,
+  );
+
   // Stabilize liveParts reference — without useMemo, a new array is created
   // on every render, breaking downstream useMemo dependencies in MessageContent.
   const liveParts = useMemo(() => {
@@ -145,7 +154,7 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   // No content yet — show blinking cursor to indicate "about to type"
   if (liveParts.length === 0) {
     return (
-      <div className="animate-fade-in">
+      <div className={freshMountRef.current ? "animate-fade-in" : undefined}>
         <StreamingStage label={t("stageThinking")} />
         <StreamingIndicator />
       </div>
@@ -174,7 +183,7 @@ export const StreamingMessage = memo(function StreamingMessage({ parts, streamin
   else if (!isActivelyStreaming && hasAnyTool) stageLabel = t("stageFinalizing");
 
   return (
-    <div className="animate-fade-in">
+    <div className={freshMountRef.current ? "animate-fade-in" : undefined}>
       {!hasAnyActivity && <StreamingStage label={isModelLoading ? t("stageThinking") : stageLabel} />}
       <MessageContent parts={liveParts} isStreaming />
       {showTail && (

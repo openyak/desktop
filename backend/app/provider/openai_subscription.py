@@ -32,6 +32,24 @@ PROVIDER_ID = "openai-subscription"
 # Curated models available through ChatGPT subscription
 _SUBSCRIPTION_MODELS: list[dict[str, Any]] = [
     {
+        "id": "gpt-5.5",
+        "name": "GPT-5.5",
+        "capabilities": {
+            "function_calling": True,
+            "vision": True,
+            "reasoning": True,
+            "json_output": True,
+            "max_context": 1_050_000,
+            "max_output": 128_000,
+        },
+        "metadata": {
+            # Same effective-window reasoning as 5.4: the advertised window is
+            # generous but Codex-style interactive sessions compact earlier.
+            # Tighten as soon as we have a measured value for 5.5 specifically.
+            "effective_context_window": 258_000,
+        },
+    },
+    {
         "id": "gpt-5.4",
         "name": "GPT-5.4",
         "capabilities": {
@@ -47,78 +65,6 @@ _SUBSCRIPTION_MODELS: list[dict[str, Any]] = [
             # experience compacts much earlier. Use the smaller effective window
             # for UI/compaction decisions while preserving the raw capability.
             "effective_context_window": 258_000,
-        },
-    },
-    {
-        "id": "gpt-5.3-codex",
-        "name": "GPT-5.3 Codex",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 1_047_576,
-            "max_output": 128_000,
-        },
-    },
-    {
-        "id": "gpt-5.2",
-        "name": "GPT-5.2",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 1_047_576,
-            "max_output": 128_000,
-        },
-    },
-    {
-        "id": "gpt-5.2-code",
-        "name": "GPT-5.2 Code",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 1_047_576,
-            "max_output": 128_000,
-        },
-    },
-    {
-        "id": "gpt-5.1-codex",
-        "name": "GPT-5.1 Codex",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 1_047_576,
-            "max_output": 32_768,
-        },
-    },
-    {
-        "id": "gpt-5.1-codex-max",
-        "name": "GPT-5.1 Codex Max",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 1_047_576,
-            "max_output": 128_000,
-        },
-    },
-    {
-        "id": "gpt-5.1-codex-mini",
-        "name": "GPT-5.1 Codex Mini",
-        "capabilities": {
-            "function_calling": True,
-            "vision": True,
-            "reasoning": True,
-            "json_output": True,
-            "max_context": 200_000,
-            "max_output": 16_384,
         },
     },
 ]

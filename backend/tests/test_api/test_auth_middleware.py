@@ -110,6 +110,36 @@ class TestPublicRoutes:
         assert r.status_code == 200
 
 
+class TestCorsPreflight:
+    """Regression for v1.1.3: the Tauri frontend runs on a different
+    origin than the loopback backend, so any request with ``Authorization``
+    (or other non-safelisted headers) goes through a CORS preflight.
+    Preflight is an ``OPTIONS`` with no credentials — the browser strips
+    them intentionally. Auth middleware must pass OPTIONS through to
+    ``CORSMiddleware`` without demanding a token; otherwise every
+    cross-origin API call 401s before it starts."""
+
+    @pytest.mark.asyncio
+    async def test_options_preflight_passes_without_token(self):
+        app = _make_app(_settings())
+        async with await _client(app) as c:
+            r = await c.request(
+                "OPTIONS",
+                "/api/ping",
+                headers={
+                    "origin": "http://localhost:3000",
+                    "access-control-request-method": "GET",
+                    "access-control-request-headers": "authorization, content-type",
+                },
+            )
+        # No specific 200 required — what matters is that we do NOT 401.
+        # The preflight may be handled by the app (200/405 depending on
+        # whether CORSMiddleware is mounted in this harness) but must not
+        # be rejected by auth.
+        assert r.status_code != 401
+        assert r.status_code != 403
+
+
 class TestDenyByDefault:
     """Reviewer feedback (Arturo, second pass): auth should be applied to
     every endpoint by default, with opt-out for specific public routes.

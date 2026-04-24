@@ -55,10 +55,14 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_window_state::Builder::new()
+                // SIZE/POSITION intentionally excluded: we want every cold
+                // start to open at the golden-ratio default from tauri.conf
+                // (width/height), centered on screen. Only DECORATIONS and
+                // VISIBLE state persist — which is a no-op for us in practice
+                // but kept so the plugin has something to do.
                 .with_state_flags(
-                    tauri_plugin_window_state::StateFlags::all()
-                        .difference(tauri_plugin_window_state::StateFlags::MAXIMIZED)
-                        .difference(tauri_plugin_window_state::StateFlags::FULLSCREEN),
+                    tauri_plugin_window_state::StateFlags::DECORATIONS
+                        | tauri_plugin_window_state::StateFlags::VISIBLE,
                 )
                 .build(),
         )
@@ -149,23 +153,10 @@ pub fn run() {
                 }
             });
 
-            // Ensure the window meets minimum size requirements after state restore.
-            // The window-state plugin may restore a size from a previous version
-            // where minWidth was lower (800). Clamp to current minimums so the
-            // sidebar is always visible on launch.
-            if let Some(window) = app.get_webview_window("main") {
-                if let Ok(size) = window.inner_size() {
-                    let min_w = 1024_u32;
-                    let min_h = 640_u32;
-                    if size.width < min_w || size.height < min_h {
-                        let new_w = size.width.max(min_w);
-                        let new_h = size.height.max(min_h);
-                        let _ = window.set_size(tauri::Size::Physical(
-                            tauri::PhysicalSize::new(new_w, new_h),
-                        ));
-                    }
-                }
-            }
+            // Size and position are not persisted across launches (see the
+            // window-state plugin flags above) — every cold start renders
+            // the window at the ``tauri.conf.json`` default, centered right
+            // before ``window.show()`` below.
 
             // Create system tray once for background mode.
             tray::create_tray(&handle)?;
@@ -236,6 +227,7 @@ pub fn run() {
                         error!("Dev mode: failed to load backend session token: {e}");
                     }
                     if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.center();
                         let _ = window.show();
                     }
                 });
@@ -247,6 +239,7 @@ pub fn run() {
                         Ok(url) => {
                             info!("Backend started at {url}");
                             if let Some(window) = app_handle.get_webview_window("main") {
+                                let _ = window.center();
                                 let _ = window.show();
                             }
                         }
@@ -254,6 +247,7 @@ pub fn run() {
                             error!("Failed to start backend: {err}");
                             let _ = app_handle.emit("backend-crash", &err);
                             if let Some(window) = app_handle.get_webview_window("main") {
+                                let _ = window.center();
                                 let _ = window.show();
                             }
                         }
