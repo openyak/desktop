@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select, text
+from sqlalchemy import DateTime, bindparam, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -310,7 +310,7 @@ async def get_usage_stats(
         )
         WHERE role = 'assistant' AND prev_role = 'user'
           AND delta_seconds > 0 AND delta_seconds < 600
-    """)
+    """).bindparams(bindparam("cutoff", type_=DateTime))
     rt_rows = (await db.execute(rt_stmt, {"cutoff": cutoff})).all()
     response_times: list[float] = [float(row.delta_seconds) for row in rt_rows]
 
