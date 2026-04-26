@@ -16,6 +16,8 @@ venv*/
 .env
 .env.local
 .env.*.local
+backend/session_token.json
+session_token.json
 
 # === Database & runtime data ===
 *.db

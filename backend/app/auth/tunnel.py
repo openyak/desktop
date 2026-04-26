@@ -7,6 +7,7 @@ Generates a random *.trycloudflare.com URL with automatic HTTPS.
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import platform
 import re
@@ -73,6 +74,20 @@ class TunnelManager:
 
         binary = await self._ensure_binary()
 
+        try:
+            return await self._start_with_binary(binary)
+        except OSError as exc:
+            if not self._should_redownload_binary(exc, binary):
+                raise
+
+            logger.warning("Bundled cloudflared binary at %s is invalid, re-downloading", binary)
+            self._remove_binary(binary)
+            binary = await self._download(binary)
+            return await self._start_with_binary(binary)
+
+    async def _start_with_binary(self, binary: Path) -> str:
+        """Start cloudflared using a specific binary path."""
+
         logger.info("Starting cloudflared tunnel on port %d...", self._port)
 
         self._process = subprocess.Popen(
@@ -104,6 +119,39 @@ class TunnelManager:
         self._monitor_task = asyncio.create_task(self._monitor(), name="tunnel-monitor")
 
         return url
+
+    def _should_redownload_binary(self, exc: OSError, binary: Path) -> bool:
+        """Return True when a managed bundled binary should be replaced."""
+        if not self._is_managed_binary(binary):
+            return False
+
+        if exc.errno in {errno.ENOEXEC, errno.EACCES}:
+            return True
+
+        # Windows: "%1 is not a valid Win32 application" — wrong arch / corrupt PE.
+        if getattr(exc, "winerror", None) == 193:
+            return True
+
+        message = str(exc).lower()
+        return (
+            "exec format error" in message
+            or "permission denied" in message
+            or "not a valid win32 application" in message
+        )
+
+    def _is_managed_binary(self, binary: Path) -> bool:
+        """Return True when the binary is the app-managed local copy."""
+        candidate = self._bin_dir / binary.name
+        try:
+            return binary.samefile(candidate)
+        except (FileNotFoundError, OSError):
+            return False
+
+    def _remove_binary(self, binary: Path) -> None:
+        """Remove a broken managed binary before re-downloading."""
+        binary.unlink(missing_ok=True)
+        self._process = None
+        self._tunnel_url = None
 
     async def stop(self) -> None:
         """Stop the tunnel subprocess."""
