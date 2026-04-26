@@ -42,6 +42,9 @@ cowork/
 .dev/
 .harness/
 
+# === Codex local config ===
+AGENTS.md
+
 # === Ollama runtime binaries ===
 backend/ollama/
 
