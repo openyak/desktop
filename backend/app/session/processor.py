@@ -1190,6 +1190,8 @@ class SessionProcessor:
                 self.step_cost = _calculate_step_cost(
                     self.usage_data, sp.model_info
                 )
+            elif sp.model_info.provider_id == "openai-subscription":
+                self.step_cost = 0.0
             else:
                 logger.warning(
                     "Pricing unavailable for model %s, cost will be $0.00 "

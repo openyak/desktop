@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Loader2, Star } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Loader2, Star } from "lucide-react";
 import { useProviderModels } from "@/hooks/use-provider-models";
 import { useModelArenaMap, type ArenaScore } from "@/hooks/use-arena-scores";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -71,7 +71,7 @@ export function HeaderModelDropdown() {
   const { t } = useTranslation("common");
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const { data: models, isLoading, activeProvider } = useProviderModels();
+  const { data: models, isLoading, isError, activeProvider } = useProviderModels();
   const hasArena = ARENA_PROVIDERS.has(activeProvider);
   const [sortBy, setSortBy] = useState<SortMode>(hasArena ? "popular" : "name");
   const { selectedModel, selectedProviderId, setSelectedModel } = useSettingsStore();
@@ -177,6 +177,28 @@ export function HeaderModelDropdown() {
         <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         <span className="truncate">{t("loadingModels", "Loading models...")}</span>
       </button>
+    );
+  }
+
+  if (isError && activeProvider) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => router.push("/settings?tab=providers")}
+              className="inline-flex h-7 max-w-[220px] items-center gap-1.5 rounded-lg border-none bg-transparent px-3 text-[13px] font-semibold text-[var(--text-secondary)] shadow-none transition-colors hover:bg-[var(--surface-secondary)] focus:outline-none cursor-pointer"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0 text-[var(--color-destructive)]" />
+              <span className="truncate">{t("modelsUnavailable", "Models unavailable")}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t("modelsUnavailableHint", "Check your provider connection, firewall, or VPN settings.")}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 

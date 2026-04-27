@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.provider.base import BaseProvider
@@ -9,6 +10,8 @@ from app.schemas.provider import ModelInfo, ProviderStatus
 from app.session.utils import compute_effective_context_window
 
 logger = logging.getLogger(__name__)
+
+MODEL_REFRESH_TIMEOUT_SECONDS = 45.0
 
 # Aggregator providers — their models should yield to direct providers
 # when no explicit provider_id is given.
@@ -63,37 +66,42 @@ class ProviderRegistry:
         new_full: list[tuple[BaseProvider, ModelInfo]] = []
 
         failed: list[tuple[str, Exception]] = []
-        for pid, provider in self._providers.items():
-            try:
-                provider.clear_cache()
-                models = await provider.list_models()
-                result[pid] = models
-                for m in models:
-                    metadata = dict(m.metadata or {})
-                    effective = compute_effective_context_window(
-                        m.capabilities.max_context,
-                        metadata.get("effective_context_window"),
-                    )
-                    if effective is not None:
-                        metadata["effective_context_window"] = effective
-                        m.metadata = metadata
-
-                    # Full list keeps everything (including duplicates)
-                    new_full.append((provider, m))
-
-                    # Quick index: direct providers win over aggregators
-                    existing = new_index.get(m.id)
-                    if existing is not None:
-                        existing_priority = _provider_priority(existing[0].id)
-                        new_priority = _provider_priority(pid)
-                        if new_priority < existing_priority:
-                            new_index[m.id] = (provider, m)
-                    else:
-                        new_index[m.id] = (provider, m)
-            except Exception as e:
-                logger.error("Failed to refresh models for %s: %s", pid, e)
+        refreshes = await asyncio.gather(
+            *(
+                self._refresh_provider_models(pid, provider)
+                for pid, provider in self._providers.items()
+            ),
+        )
+        for pid, provider, models, error in refreshes:
+            if error is not None:
+                logger.error("Failed to refresh models for %s: %s", pid, error)
                 result[pid] = []
-                failed.append((pid, e))
+                failed.append((pid, error))
+                continue
+
+            result[pid] = models
+            for m in models:
+                metadata = dict(m.metadata or {})
+                effective = compute_effective_context_window(
+                    m.capabilities.max_context,
+                    metadata.get("effective_context_window"),
+                )
+                if effective is not None:
+                    metadata["effective_context_window"] = effective
+                    m.metadata = metadata
+
+                # Full list keeps everything (including duplicates)
+                new_full.append((provider, m))
+
+                # Quick index: direct providers win over aggregators
+                existing = new_index.get(m.id)
+                if existing is not None:
+                    existing_priority = _provider_priority(existing[0].id)
+                    new_priority = _provider_priority(pid)
+                    if new_priority < existing_priority:
+                        new_index[m.id] = (provider, m)
+                else:
+                    new_index[m.id] = (provider, m)
 
         if new_index or not failed:
             self._model_index = new_index
@@ -109,6 +117,26 @@ class ProviderRegistry:
             len(self._providers),
         )
         return result
+
+    async def _refresh_provider_models(
+        self,
+        pid: str,
+        provider: BaseProvider,
+    ) -> tuple[str, BaseProvider, list[ModelInfo], Exception | None]:
+        try:
+            provider.clear_cache()
+            models = await asyncio.wait_for(
+                provider.list_models(),
+                timeout=MODEL_REFRESH_TIMEOUT_SECONDS,
+            )
+            return pid, provider, models, None
+        except Exception as e:
+            if isinstance(e, TimeoutError):
+                e = TimeoutError(
+                    f"Timed out refreshing models for {pid} after "
+                    f"{MODEL_REFRESH_TIMEOUT_SECONDS:g}s"
+                )
+            return pid, provider, [], e
 
     def resolve_model(
         self,

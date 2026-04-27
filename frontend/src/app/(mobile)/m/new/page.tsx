@@ -43,7 +43,7 @@ export default function MobileNewTaskPage() {
     }
     // If models loaded but nothing selected, pick first
     if (models.length > 0 && !selectedModel) {
-      setSelectedModel(models[0].id);
+      setSelectedModel(models[0].id, models[0].provider_id);
     }
   }, [router, models, selectedModel, setSelectedModel]);
 
@@ -135,7 +135,10 @@ export default function MobileNewTaskPage() {
         <div className="relative mb-4">
           <select
             value={selectedModel ?? ""}
-            onChange={(e) => setSelectedModel(e.target.value)}
+            onChange={(e) => {
+              const model = models.find((m) => m.id === e.target.value);
+              setSelectedModel(e.target.value, model?.provider_id ?? null);
+            }}
             disabled={loadingModels || models.length === 0}
             className="w-full appearance-none pl-3 pr-7 py-2 rounded-full bg-[var(--surface-secondary)] text-[16px] font-medium border border-[var(--border-default)] text-[var(--text-primary)] disabled:opacity-50 focus:outline-none focus:border-[var(--border-heavy)]"
           >

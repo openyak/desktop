@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
+import pytest
+
+import app.provider.registry as registry_module
 from app.provider.registry import ProviderRegistry
 from app.schemas.provider import ModelCapabilities, ModelInfo, ProviderStatus
 
@@ -77,6 +80,27 @@ class TestRefreshModels:
         reg.register(bad)
         with pytest.raises(RuntimeError, match="down"):
             await reg.refresh_models()
+
+    @pytest.mark.asyncio
+    async def test_provider_timeout_does_not_block_successes(self, monkeypatch):
+        monkeypatch.setattr(registry_module, "MODEL_REFRESH_TIMEOUT_SECONDS", 0.01)
+
+        async def slow_models():
+            await asyncio.sleep(1)
+            return [_model("slow")]
+
+        reg = ProviderRegistry()
+        good = _make_provider("good", [_model("m1")])
+        slow = _make_provider("slow")
+        slow.list_models = AsyncMock(side_effect=slow_models)
+        reg.register(good)
+        reg.register(slow)
+
+        result = await reg.refresh_models()
+
+        assert len(result["good"]) == 1
+        assert result["slow"] == []
+        assert len(reg.all_models()) == 1
 
 
 class TestResolveModel:

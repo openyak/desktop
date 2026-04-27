@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { API } from "@/lib/constants";
 import { artifactTypeFromExtension, languageFromExtension } from "@/lib/artifacts";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -63,12 +63,12 @@ export function FilePreviewRenderer({ filePath, content: initialContent, languag
       })
       .catch((err) => {
         console.error("[FilePreview] Error:", err);
-        setError(err.message || "Failed to load file");
+        setError(apiErrorMessage(err, "Failed to load file"));
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [filePath, initialContent, isBinary]);
+  }, [filePath, initialContent, isBinary, workspace]);
 
   // Binary formats delegate to their own renderers
   if (isBinary) {

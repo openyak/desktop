@@ -67,6 +67,8 @@
   "plugins": "Plugins",
   "models": "Models",
   "remote": "Remote",
+  "modelsUnavailable": "Models unavailable",
+  "modelsUnavailableHint": "Check your provider connection, firewall, or VPN settings.",
   "setupProvider": "Set up provider",
   "setUpProvider": "Set up provider",
   "apiKey": "API Key"

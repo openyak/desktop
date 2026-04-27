@@ -20,7 +20,8 @@ import {
   WINDOW_TOP_ICONS_WIDTH_MAC,
   WINDOW_TOP_ICONS_WIDTH_OTHER,
 } from "@/components/layout/window-top-icons";
-import { API, IS_DESKTOP, resolveApiUrl } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
+import { API, IS_DESKTOP } from "@/lib/constants";
 import { isRemoteMode } from "@/lib/remote-connection";
 
 interface ChatHeaderProps {
@@ -79,16 +80,19 @@ export function ChatHeader({ sessionId }: ChatHeaderProps) {
     if (!sessionId) return;
     setPdfLoading(true);
     try {
-      const exportUrl = resolveApiUrl(API.SESSIONS.EXPORT_PDF(sessionId));
+      const res = await apiFetch(API.SESSIONS.EXPORT_PDF(sessionId), { timeoutMs: 120_000 });
 
       if (IS_DESKTOP) {
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || "Export failed");
+        }
         // WebView2 does not support blob-URL downloads via <a>.click(),
         // so use a Tauri command with native save dialog instead.
         const { desktopAPI } = await import("@/lib/tauri-api");
-        await desktopAPI.downloadAndSave({ url: exportUrl, defaultName: "conversation.pdf" });
+        const bytes = Array.from(new Uint8Array(await res.arrayBuffer()));
+        await desktopAPI.downloadAndSave({ data: bytes, defaultName: "conversation.pdf" });
       } else {
-        const res = await fetch(exportUrl);
-
         if (!res.ok) {
           const errorText = await res.text();
           let errorDetail = errorText;

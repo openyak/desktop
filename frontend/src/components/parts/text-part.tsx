@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { Copy, Check, PanelRight, FileText, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { API } from "@/lib/constants";
@@ -303,7 +304,15 @@ export const TextPart = memo(function TextPart({ data, isStreaming, sources = []
             >
               <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-tertiary)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer align-middle mx-0.5">
                 {source.favicon && (
-                  <img src={source.favicon} alt="" className="h-3.5 w-3.5 rounded-sm" loading="lazy" />
+                  <Image
+                    src={source.favicon}
+                    alt=""
+                    width={14}
+                    height={14}
+                    unoptimized
+                    className="h-3.5 w-3.5 rounded-sm"
+                    loading="lazy"
+                  />
                 )}
                 <span className="truncate max-w-[150px]">{source.domain}</span>
               </span>

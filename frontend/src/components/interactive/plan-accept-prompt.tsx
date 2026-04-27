@@ -51,7 +51,7 @@ export function PlanAcceptPrompt({ onRespond }: PlanAcceptPromptProps) {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onRespond]);
+  }, [isMobile, onRespond]);
 
   const handleFeedbackSubmit = useCallback(() => {
     const text = feedback.trim();

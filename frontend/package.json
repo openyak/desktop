@@ -8,7 +8,11 @@
     "postinstall": "cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs 2>/dev/null || true; rm -rf public/cmaps public/standard_fonts 2>/dev/null; cp -R node_modules/pdfjs-dist/cmaps public/cmaps 2>/dev/null || true; cp -R node_modules/pdfjs-dist/standard_fonts public/standard_fonts 2>/dev/null || true",
     "build": "cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.mjs 2>/dev/null || true; rm -rf public/cmaps public/standard_fonts 2>/dev/null; cp -R node_modules/pdfjs-dist/cmaps public/cmaps 2>/dev/null || true; cp -R node_modules/pdfjs-dist/standard_fonts public/standard_fonts 2>/dev/null || true; next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:ui": "node scripts/playwright-env.mjs test",
+    "test:ui:headed": "node scripts/playwright-env.mjs test --headed",
+    "test:ui:headless": "node scripts/playwright-env.mjs --headless test",
+    "preflight:ui": "node scripts/playwright-env.mjs test --project=chromium"
   },
   "dependencies": {
     "@emotion/react": "^11.11.0",
@@ -65,6 +69,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.0.0",
     "@types/papaparse": "^5.5.2",

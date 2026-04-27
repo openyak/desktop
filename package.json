@@ -12,7 +12,9 @@
     "build:frontend": "cd frontend && cross-env DESKTOP_BUILD=true NEXT_PUBLIC_DESKTOP_BUILD=true npm run build",
     "build:backend": "cd backend && node -e \"const p=process.platform==='win32'?'venv/Scripts/pyinstaller':'venv/bin/pyinstaller';require('child_process').execSync(p+' openyak.spec --noconfirm',{stdio:'inherit'})\"",
     "sync:desktop-meta": "node scripts/sync-desktop-meta.mjs",
-    "build:desktop": "npm run sync:desktop-meta && cd desktop-tauri && cargo tauri build"
+    "build:desktop": "npm run sync:desktop-meta && cd desktop-tauri && cargo tauri build",
+    "preflight": "npm run preflight:ui",
+    "preflight:ui": "cd frontend && npm run preflight:ui"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

@@ -237,11 +237,16 @@ function ConnectorRow({
   const qc = useQueryClient();
 
   const handleConnect = async () => {
-    // Google Workspace uses direct Google OAuth (not MCP OAuth)
-    const isGoogle = id === "google-workspace";
-    const result = isGoogle
-      ? await api.post<{ success: boolean; auth_url?: string; state?: string; error?: string }>(API.GOOGLE.AUTH_START)
-      : await connect.mutateAsync(id);
+    let result: { success: boolean; auth_url?: string; state?: string; error?: string };
+    try {
+      // Google Workspace uses direct Google OAuth (not MCP OAuth)
+      const isGoogle = id === "google-workspace";
+      result = isGoogle
+        ? await api.post<{ success: boolean; auth_url?: string; state?: string; error?: string }>(API.GOOGLE.AUTH_START)
+        : await connect.mutateAsync(id);
+    } catch {
+      return;
+    }
 
     if (result.success && result.auth_url) {
       if (IS_DESKTOP) {
@@ -543,7 +548,7 @@ function SkillsTab({ search }: { search: string }) {
   const { data: skills, isLoading } = useSkills();
   const [storeOpen, setStoreOpen] = useState(false);
 
-  const allSkills = skills ?? [];
+  const allSkills = useMemo(() => skills ?? [], [skills]);
 
   // Lowercased name set for fast "already installed?" lookups in the store.
   const installedNames = useMemo(

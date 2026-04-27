@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { API, getBackendUrl } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
+import { API } from "@/lib/constants";
 
 export function SetupFlow({ onComplete }: { onComplete: () => void }) {
   const { t } = useTranslation("settings");
@@ -21,10 +22,10 @@ export function SetupFlow({ onComplete }: { onComplete: () => void }) {
     setProgress({ status: "starting" });
 
     try {
-      const backendUrl = await getBackendUrl();
-      const resp = await fetch(`${backendUrl}${API.OLLAMA.SETUP}`, {
+      const resp = await apiFetch(API.OLLAMA.SETUP, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        timeoutMs: 120_000,
       });
 
       if (!resp.ok || !resp.body) {

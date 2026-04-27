@@ -8,7 +8,6 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useTranslation } from 'react-i18next';
 import { ChatForm } from "./chat-form";
 import { ChatHeader } from "./chat-header";
@@ -35,6 +34,10 @@ const FEATURED_STARTERS = [
 
 const STARTERS_PER_MOUNT = 3;
 
+interface LandingProps {
+  directoryParam?: string | null;
+}
+
 function workspaceBasename(path: string | null | undefined): string | null {
   if (!path || path === ".") return null;
   const trimmed = path.replace(/[\\/]+$/, "");
@@ -52,14 +55,12 @@ function pickRandomStarters(count: number): typeof FEATURED_STARTERS {
   return pool.slice(0, count);
 }
 
-export function Landing() {
+export function Landing({ directoryParam = null }: LandingProps) {
   const { t } = useTranslation('chat');
   const { sendMessage, isGenerating, stopGeneration, pendingUserText, pendingAttachments, streamingParts, streamingText, streamingReasoning } = useChat();
   const globalWorkspace = useSettingsStore((s) => s.workspaceDirectory);
   const workspaceName = workspaceBasename(globalWorkspace);
   const activeProvider = useSettingsStore((s) => s.activeProvider);
-  const searchParams = useSearchParams();
-  const directoryParam = searchParams?.get("directory") ?? null;
   // Start with a deterministic slice so SSR and first client render match,
   // then shuffle post-mount. A new random pair is drawn every time Landing
   // remounts (i.e. every new chat opened).

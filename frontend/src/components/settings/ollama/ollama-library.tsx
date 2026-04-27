@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
-import { API, getBackendUrl } from "@/lib/constants";
+import { api, apiFetch } from "@/lib/api";
+import { API } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { LibraryData, LibraryModel } from "./types";
 
@@ -129,12 +129,12 @@ export function ModelLibrary({
       setPullProgress({ status: "starting" });
 
       try {
-        const backendUrl = await getBackendUrl();
-        const resp = await fetch(`${backendUrl}${API.OLLAMA.PULL}`, {
+        const resp = await apiFetch(API.OLLAMA.PULL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: modelName }),
           signal: abortController.signal,
+          timeoutMs: 120_000,
         });
 
         if (!resp.ok || !resp.body) {

@@ -3,7 +3,8 @@
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { API, IS_DESKTOP, resolveApiUrl } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
+import { API, IS_DESKTOP } from "@/lib/constants";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -26,6 +27,10 @@ function parseFilename(res: Response, fallback: string): string {
   return fallback;
 }
 
+async function responseBytes(res: Response): Promise<number[]> {
+  return Array.from(new Uint8Array(await res.arrayBuffer()));
+}
+
 export function useSessionExport() {
   const { t } = useTranslation("common");
   const tRef = useRef(t);
@@ -33,15 +38,15 @@ export function useSessionExport() {
 
   const exportPdf = useCallback(async (id: string, title: string) => {
     try {
-      const exportUrl = resolveApiUrl(API.SESSIONS.EXPORT_PDF(id));
+      const res = await apiFetch(API.SESSIONS.EXPORT_PDF(id), { timeoutMs: 120_000 });
+      if (!res.ok) throw new Error("PDF export failed");
+      const filename = parseFilename(res, `${title}.pdf`);
       if (IS_DESKTOP) {
         const { desktopAPI } = await import("@/lib/tauri-api");
-        await desktopAPI.downloadAndSave({ url: exportUrl, defaultName: `${title}.pdf` });
+        await desktopAPI.downloadAndSave({ data: await responseBytes(res), defaultName: filename });
       } else {
-        const res = await fetch(exportUrl);
-        if (!res.ok) throw new Error("PDF export failed");
         const blob = await res.blob();
-        downloadBlob(blob, parseFilename(res, `${title}.pdf`));
+        downloadBlob(blob, filename);
       }
     } catch (err) {
       console.error("PDF export failed:", err);
@@ -51,13 +56,12 @@ export function useSessionExport() {
 
   const exportMarkdown = useCallback(async (id: string, title: string) => {
     try {
-      const exportUrl = resolveApiUrl(API.SESSIONS.EXPORT_MD(id));
+      const res = await apiFetch(API.SESSIONS.EXPORT_MD(id), { timeoutMs: 120_000 });
+      if (!res.ok) throw new Error("Markdown export failed");
       if (IS_DESKTOP) {
         const { desktopAPI } = await import("@/lib/tauri-api");
-        await desktopAPI.downloadAndSave({ url: exportUrl, defaultName: `${title}.md` });
+        await desktopAPI.downloadAndSave({ data: await responseBytes(res), defaultName: `${title}.md` });
       } else {
-        const res = await fetch(exportUrl);
-        if (!res.ok) throw new Error("Markdown export failed");
         const blob = await res.blob();
         downloadBlob(blob, `${title}.md`);
       }

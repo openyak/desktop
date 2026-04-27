@@ -44,6 +44,7 @@ cowork/
 
 # === Codex local config ===
 AGENTS.md
+.codex-artifacts/
 
 # === Ollama runtime binaries ===
 backend/ollama/
@@ -58,6 +59,8 @@ backend/openclaw/
 frontend/public/pdf.worker.min.mjs
 frontend/public/cmaps/
 frontend/public/standard_fonts/
+frontend/test-results/
+frontend/playwright-report/
 
 # === Build artifacts ===
 dist*/

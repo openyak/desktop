@@ -19,7 +19,7 @@ import { AnimatedOpenYakLogo } from "@/components/layout/splash-screen";
 import { useAuthStore, type OpenYakUser } from "@/stores/auth-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { proxyApi, ProxyApiError } from "@/lib/proxy-api";
-import { api } from "@/lib/api";
+import { api, apiFetch } from "@/lib/api";
 import { API, IS_DESKTOP, queryKeys } from "@/lib/constants";
 import { desktopAPI } from "@/lib/tauri-api";
 
@@ -88,11 +88,12 @@ export function OnboardingScreen() {
     } catch {
       // Fallback: call backend directly via desktop IPC-resolved URL.
       if (IS_DESKTOP) {
-        const backendUrl = await desktopAPI.getBackendUrl();
-        const res = await fetch(`${backendUrl}${API.CONFIG.OPENYAK_ACCOUNT}`, {
+        await desktopAPI.getBackendUrl();
+        const res = await apiFetch(API.CONFIG.OPENYAK_ACCOUNT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          timeoutMs: 30_000,
         });
         if (res.ok) return;
       }

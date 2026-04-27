@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowLeft, Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink, X, Unplug } from "lucide-react";
-import Link from "next/link";
+import { Wifi, WifiOff, QrCode, Copy, RefreshCw, Shield, Check, Loader2, AlertTriangle, Eye, EyeOff, ExternalLink, Unplug } from "lucide-react";
+import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
-import { API, IS_DESKTOP, getBackendUrl } from "@/lib/constants";
+import { api, apiFetch } from "@/lib/api";
+import { API, getBackendUrl } from "@/lib/constants";
 import {
   useChannels,
   useAddChannel,
@@ -45,18 +45,17 @@ export function RemoteTabContent() {
   const prevTunnelUrl = useRef<string | null>(null);
 
   // Fetch QR image as blob URL to bypass Tauri CSP (img-src blocks http://127.0.0.1)
-  const fetchQrBlob = async () => {
+  const fetchQrBlob = useCallback(async () => {
     try {
-      const backendUrl = IS_DESKTOP ? await getBackendUrl() : "";
-      const res = await fetch(`${backendUrl}${API.REMOTE.QR}?t=${Date.now()}`);
+      const res = await apiFetch(`${API.REMOTE.QR}?t=${Date.now()}`);
       if (!res.ok) return;
       const blob = await res.blob();
       // Revoke previous blob URL to avoid memory leaks
       setQrBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
     } catch {}
-  };
+  }, []);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const data = await api.get<typeof status>(API.REMOTE.STATUS);
       setStatus(data);
@@ -76,16 +75,16 @@ export function RemoteTabContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchQrBlob, showQr]);
 
-  useEffect(() => { fetchStatus(); }, []);
+  useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
   // Poll status every 30s to detect tunnel restarts
   useEffect(() => {
     if (!status?.enabled) return;
     const interval = setInterval(fetchStatus, 30_000);
     return () => clearInterval(interval);
-  }, [status?.enabled]);
+  }, [fetchStatus, status?.enabled]);
 
   const handleToggle = async () => {
     if (!status) return;
@@ -208,7 +207,15 @@ export function RemoteTabContent() {
 
           {showQr && qrBlobUrl && (
             <div className="flex justify-center p-4 rounded-lg bg-white">
-              <img src={qrBlobUrl} alt={t("remoteQrAlt")} className="w-48 h-48" style={{ imageRendering: "pixelated" }} />
+              <Image
+                src={qrBlobUrl}
+                alt={t("remoteQrAlt")}
+                width={192}
+                height={192}
+                unoptimized
+                className="w-48 h-48"
+                style={{ imageRendering: "pixelated" }}
+              />
             </div>
           )}
 
@@ -486,11 +493,12 @@ function QrLoginFlow({ channel, onDone }: { channel: string; onDone: () => void 
 
     (async () => {
       try {
-        const backendUrl = await getBackendUrl();
-        const resp = await fetch(`${backendUrl}${API.CHANNELS.LOGIN}`, {
+        await getBackendUrl();
+        const resp = await apiFetch(API.CHANNELS.LOGIN, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channel }),
+          timeoutMs: 120_000,
         });
 
         if (!resp.ok || !resp.body) {
@@ -540,19 +548,25 @@ function QrLoginFlow({ channel, onDone }: { channel: string; onDone: () => void 
         setError(String(e));
       }
     })();
-  }, [channel, onDone]);
+  }, [channel, onDone, t]);
 
   if (error) {
     return <p className="text-ui-2xs text-red-400 py-2">{error}</p>;
   }
 
-  const hasQr = qrUrl || qrText;
-
   return (
     <div className="space-y-2 py-1">
       {qrUrl ? (
         <div className="flex justify-center p-3 rounded-lg bg-white">
-          <img src={qrUrl} alt={t("qrCodeAlt")} className="w-48 h-48" style={{ imageRendering: "pixelated" }} />
+          <Image
+            src={qrUrl}
+            alt={t("qrCodeAlt")}
+            width={192}
+            height={192}
+            unoptimized
+            className="w-48 h-48"
+            style={{ imageRendering: "pixelated" }}
+          />
         </div>
       ) : qrText ? (
         <div className="flex justify-center p-2 rounded-lg bg-white overflow-x-auto">

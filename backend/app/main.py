@@ -18,6 +18,7 @@ from app.api.openai_compat import router as openai_compat_router
 from app.api.router import api_router
 from app.auth.csrf import CsrfProtectionMiddleware
 from app.auth.middleware import AuthMiddleware
+from app.auth.private_network import PrivateNetworkAccessMiddleware
 from app.auth.token import ensure_session_token
 from app.config import Settings
 from app.dependencies import (
@@ -633,6 +634,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
         expose_headers=["Content-Disposition"],
+    )
+
+    # Chromium/WebView2 Private Network Access preflights need an explicit
+    # opt-in header for trusted app-origin → loopback requests.
+    app.add_middleware(
+        PrivateNetworkAccessMiddleware,
+        extra_allowed_origins=extra_origins,
     )
 
     # CSRF — rejects cross-site state-changing requests at the server before

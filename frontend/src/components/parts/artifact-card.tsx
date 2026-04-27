@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useArtifactStore } from "@/stores/artifact-store";
-import { API, resolveApiUrl } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
+import { API } from "@/lib/constants";
 import type { ToolPart } from "@/types/message";
 import type { ArtifactType } from "@/types/artifact";
 
@@ -100,10 +101,11 @@ export function ArtifactCard({ data }: ArtifactCardProps) {
       if (artifactType === "markdown") {
         setDownloading(true);
         try {
-          const res = await fetch(resolveApiUrl(API.ARTIFACTS.EXPORT_PDF), {
+          const res = await apiFetch(API.ARTIFACTS.EXPORT_PDF, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content, title }),
+            timeoutMs: 120_000,
           });
           if (!res.ok) throw new Error("PDF export failed");
           const blob = await res.blob();

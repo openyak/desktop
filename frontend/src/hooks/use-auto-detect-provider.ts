@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSettingsStore } from "@/stores/settings-store";
-import { useAuthStore } from "@/stores/auth-store";
+import { useSettingsHasHydrated, useSettingsStore } from "@/stores/settings-store";
+import { useAuthHasHydrated, useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
 import type { ApiKeyStatus, ProviderInfo, LocalProviderStatus } from "@/types/usage";
@@ -27,6 +27,8 @@ export function useAutoDetectProvider(): { hasProvider: boolean } {
   const activeProvider = useSettingsStore((s) => s.activeProvider);
   const setActiveProvider = useSettingsStore((s) => s.setActiveProvider);
   const isConnected = useAuthStore((s) => s.isConnected);
+  const settingsHydrated = useSettingsHasHydrated();
+  const authHydrated = useAuthHasHydrated();
 
   const { data: keyStatus } = useQuery({
     queryKey: queryKeys.apiKeyStatus,
@@ -58,6 +60,7 @@ export function useAutoDetectProvider(): { hasProvider: boolean } {
   const hasAnyDirectProvider = (providers ?? []).some((p) => p.is_configured);
 
   useEffect(() => {
+    if (!settingsHydrated || !authHydrated) return;
     if (activeProvider !== null) return;
     if (openaiSubStatus?.is_connected) setActiveProvider("chatgpt");
     else if (isConnected) setActiveProvider("openyak");
@@ -73,7 +76,9 @@ export function useAutoDetectProvider(): { hasProvider: boolean } {
     localStatus?.is_connected,
     ollamaConnected,
     setActiveProvider,
+    settingsHydrated,
+    authHydrated,
   ]);
 
-  return { hasProvider: activeProvider !== null };
+  return { hasProvider: settingsHydrated && activeProvider !== null };
 }

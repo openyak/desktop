@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { API, IS_DESKTOP, resolveApiUrl } from "@/lib/constants";
+import { apiFetch } from "@/lib/api";
+import { API, IS_DESKTOP } from "@/lib/constants";
 
 interface MarkdownRendererProps {
   content: string;
@@ -68,10 +69,11 @@ export function MarkdownRenderer({ content, title }: MarkdownRendererProps) {
     const filename = toFilename(title, "pdf");
     setPdfLoading(true);
     try {
-      const res = await fetch(resolveApiUrl(API.ARTIFACTS.EXPORT_PDF), {
+      const res = await apiFetch(API.ARTIFACTS.EXPORT_PDF, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, title: title || "document" }),
+        timeoutMs: 120_000,
       });
       if (!res.ok) throw new Error("PDF export failed");
       const blob = await res.blob();

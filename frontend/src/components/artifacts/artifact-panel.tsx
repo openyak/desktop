@@ -40,7 +40,7 @@ function ResizeHandle() {
       startXRef.current = e.clientX;
       startWidthRef.current = useArtifactStore.getState().panelWidth;
     },
-    [setWidth],
+    [],
   );
 
   useEffect(() => {

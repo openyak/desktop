@@ -91,7 +91,7 @@ async function syncProviderAndModel(): Promise<void> {
           // Wrong provider — pick a new model
           const correct = models.find((m) => m.provider_id === backendProviderId);
           if (correct) {
-            useSettingsStore.getState().setSelectedModel(correct.id);
+            useSettingsStore.getState().setSelectedModel(correct.id, correct.provider_id);
           }
         }
       }
@@ -106,7 +106,7 @@ async function syncProviderAndModel(): Promise<void> {
       if (Array.isArray(models)) {
         const match = models.find((m) => m.provider_id === backendProviderId);
         if (match) {
-          useSettingsStore.getState().setSelectedModel(match.id);
+          useSettingsStore.getState().setSelectedModel(match.id, match.provider_id);
         }
       }
     } catch {}

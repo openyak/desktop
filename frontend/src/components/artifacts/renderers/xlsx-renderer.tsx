@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { API } from "@/lib/constants";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -77,7 +77,7 @@ export function XlsxRenderer({ filePath }: XlsxRendererProps) {
         setActiveSheet(0);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to render spreadsheet");
+          setError(apiErrorMessage(err, "Failed to render spreadsheet"));
         }
       } finally {
         if (!cancelled) setLoading(false);

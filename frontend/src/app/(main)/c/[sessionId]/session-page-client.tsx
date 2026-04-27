@@ -1,12 +1,12 @@
 "use client";
 
 import { ChatView } from "@/components/chat/chat-view";
-import { useActiveSessionId } from "@/hooks/use-active-session-id";
 
-export function SessionPageClient() {
-  const resolvedSessionId = useActiveSessionId();
+interface SessionPageClientProps {
+  sessionId: string | null;
+}
 
-  if (!resolvedSessionId) return null;
-
-  return <ChatView sessionId={resolvedSessionId} />;
+export function SessionPageClient({ sessionId }: SessionPageClientProps) {
+  if (!sessionId) return null;
+  return <ChatView sessionId={sessionId} />;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 interface SvgRendererProps {
@@ -53,9 +54,12 @@ export function SvgRenderer({ content }: SvgRendererProps) {
 
       {/* SVG display */}
       <div className="flex-1 overflow-auto flex items-center justify-center bg-[var(--surface-secondary)] p-4">
-        <img
+        <Image
           src={svgDataUrl}
           alt="SVG Preview"
+          width={800}
+          height={600}
+          unoptimized
           style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center center" }}
           className="max-w-full transition-transform"
         />

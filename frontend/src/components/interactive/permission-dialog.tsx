@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ShieldAlert, ShieldCheck, ShieldX, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -92,7 +92,7 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
 
   useRequestNotificationPermission();
 
-  const handleRespond = async (allow: boolean) => {
+  const handleRespond = useCallback(async (allow: boolean) => {
     if (submitting) return;
     setSubmitting(true);
     if (rememberChoice) {
@@ -103,7 +103,14 @@ export function PermissionDialog({ permission, onRespond }: PermissionDialogProp
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [
+    onRespond,
+    permission.permission,
+    permission.tool,
+    rememberChoice,
+    savePermissionRule,
+    submitting,
+  ]);
 
   // Keep ref in sync for keyboard handler (avoids stale closure)
   respondRef.current = handleRespond;

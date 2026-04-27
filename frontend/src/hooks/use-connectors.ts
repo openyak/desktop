@@ -1,9 +1,25 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { API, queryKeys } from "@/lib/constants";
 import type { ConnectorsResponse } from "@/types/connectors";
+
+function errorDetail(error: unknown, fallback: string) {
+  if (
+    typeof error === "object" &&
+    error &&
+    "body" in error &&
+    typeof (error as { body?: unknown }).body === "object" &&
+    (error as { body?: Record<string, unknown> }).body
+  ) {
+    const detail = (error as { body?: Record<string, unknown> }).body?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+  }
+  if (error instanceof Error) return error.message || fallback;
+  return fallback;
+}
 
 export function useConnectors() {
   return useQuery({
@@ -33,6 +49,9 @@ export function useConnectorConnect() {
       api.post<{ success: boolean; auth_url?: string; state?: string; error?: string }>(
         API.CONNECTORS.CONNECT(id),
       ),
+    onError: (error) => {
+      toast.error(errorDetail(error, "Failed to connect connector"));
+    },
   });
 }
 
@@ -55,6 +74,9 @@ export function useConnectorReconnect() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
     },
+    onError: (error) => {
+      toast.error(errorDetail(error, "Failed to reconnect connector"));
+    },
   });
 }
 
@@ -65,6 +87,9 @@ export function useSetConnectorToken() {
       api.post<{ success: boolean }>(API.CONNECTORS.SET_TOKEN(id), { token }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.connectors });
+    },
+    onError: (error) => {
+      toast.error(errorDetail(error, "Failed to save connector token"));
     },
   });
 }

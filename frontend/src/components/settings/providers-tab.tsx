@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useAuthStore, type OpenYakUser } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
+import { api, apiFetch, ApiError } from "@/lib/api";
 import { proxyApi, ProxyApiError } from "@/lib/proxy-api";
 import { API, IS_DESKTOP, queryKeys } from "@/lib/constants";
 import { desktopAPI } from "@/lib/tauri-api";
@@ -70,11 +70,12 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       await api.post(API.CONFIG.OPENYAK_ACCOUNT, payload);
     } catch {
       if (IS_DESKTOP) {
-        const backendUrl = await desktopAPI.getBackendUrl();
-        const res = await fetch(`${backendUrl}${API.CONFIG.OPENYAK_ACCOUNT}`, {
+        await desktopAPI.getBackendUrl();
+        const res = await apiFetch(API.CONFIG.OPENYAK_ACCOUNT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          timeoutMs: 30_000,
         });
         if (res.ok) return;
       }
@@ -320,7 +321,7 @@ export function ProvidersTab({ onNavigateTab }: ProvidersTabProps) {
       setLocalError(null);
       qc.invalidateQueries({ queryKey: queryKeys.localProvider });
       qc.invalidateQueries({ queryKey: queryKeys.models });
-      setActiveProvider("local");
+      activateProviderMode("local");
     },
     onError: (err) => {
       const detail = err instanceof ApiError ? ((err.body as Record<string, string> | undefined)?.detail ?? t('failedSaveKey')) : t('failedSaveKey');

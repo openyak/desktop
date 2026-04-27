@@ -568,8 +568,13 @@ export function ChatForm({ isGenerating, isCompacting = false, onSend, onStop, c
 function AgentToggle() {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const workMode = useSettingsStore((s) => s.workMode);
   const setWorkMode = useSettingsStore((s) => s.setWorkMode);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const modes = [
     { key: "plan" as const, label: t("modePlan"), desc: t("modeDesc_plan") },
@@ -578,6 +583,19 @@ function AgentToggle() {
   ];
 
   const active = modes.find((m) => m.key === workMode) ?? modes[2];
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium bg-[var(--surface-tertiary)] text-[var(--text-primary)] opacity-70"
+      >
+        <span>{active.label}</span>
+        <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+      </button>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

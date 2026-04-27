@@ -75,7 +75,7 @@ class ChannelManager:
     async def start_all(self) -> None:
         """Start all channels and the outbound dispatcher."""
         if not self.channels:
-            logger.warning("No channels enabled")
+            logger.info("No channels enabled")
             return
 
         # Start outbound dispatcher

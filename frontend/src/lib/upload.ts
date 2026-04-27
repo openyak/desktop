@@ -1,5 +1,5 @@
-import { api } from "./api";
-import { API, IS_DESKTOP, resolveApiUrl, getBackendUrl } from "./constants";
+import { api, apiFetch } from "./api";
+import { API, IS_DESKTOP } from "./constants";
 import type { FileAttachment } from "@/types/chat";
 
 export interface FileSearchResult {
@@ -20,7 +20,7 @@ export async function uploadFile(file: File): Promise<FileAttachment> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(resolveApiUrl(API.FILES.UPLOAD), {
+  const res = await apiFetch(API.FILES.UPLOAD, {
     method: "POST",
     body: formData,
   });
@@ -61,14 +61,11 @@ export async function browseFiles(): Promise<FileAttachment[]> {
 
   // Use raw fetch — same reason as browseDirectory: avoid retry-on-timeout
   // opening duplicate OS dialogs.
-  const url = IS_DESKTOP
-    ? `${await getBackendUrl()}${API.FILES.BROWSE}`
-    : resolveApiUrl(API.FILES.BROWSE);
-  const res = await fetch(url, {
+  const res = await apiFetch(API.FILES.BROWSE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ multiple: true, title: "Select files" }),
-    signal: AbortSignal.timeout(600_000),
+    timeoutMs: 600_000,
   });
   if (!res.ok) throw new Error(`Browse failed: ${res.status}`);
   return res.json() as Promise<FileAttachment[]>;
@@ -95,14 +92,11 @@ export async function browseDirectory(title = "Select directory"): Promise<strin
   // Use raw fetch with a long timeout instead of api.post — the backend
   // blocks while the native OS dialog is open, and api.post's retry logic
   // would open duplicate dialogs if the proxy connection drops.
-  const url = IS_DESKTOP
-    ? `${await getBackendUrl()}${API.FILES.BROWSE_DIRECTORY}`
-    : resolveApiUrl(API.FILES.BROWSE_DIRECTORY);
-  const res = await fetch(url, {
+  const res = await apiFetch(API.FILES.BROWSE_DIRECTORY, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
-    signal: AbortSignal.timeout(600_000), // 10 minutes
+    timeoutMs: 600_000, // 10 minutes
   });
   if (!res.ok) throw new Error(`Browse failed: ${res.status}`);
   const result: { path: string | null } = await res.json();

@@ -22,11 +22,95 @@ class ApiError extends Error {
 
 /** Max retries for network errors (connection refused/reset during backend restart). */
 const NETWORK_RETRY_MAX = 3;
+const DEFAULT_GET_TIMEOUT_MS = 30_000;
+const DEFAULT_MUTATION_TIMEOUT_MS = 120_000;
+
+export type ApiRequestInit = RequestInit & {
+  timeoutMs?: number;
+};
+
+async function resolveRequestUrl(url: string): Promise<string> {
+  const remoteConfig = getRemoteConfig();
+  if (remoteConfig) {
+    return url.startsWith("http") ? url : `${remoteConfig.url}${url}`;
+  }
+  if (IS_DESKTOP) {
+    const backend = await getBackendUrl();
+    return url.startsWith("http") ? url : `${backend}${url}`;
+  }
+  return resolveApiUrl(url);
+}
+
+async function buildAuthHeaders(): Promise<Record<string, string>> {
+  const remoteConfig = getRemoteConfig();
+  if (remoteConfig) {
+    return { Authorization: `Bearer ${remoteConfig.token}` };
+  }
+  if (IS_DESKTOP) {
+    const token = await getBackendToken();
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
+export async function apiFetch(
+  url: string,
+  options?: ApiRequestInit,
+): Promise<Response> {
+  const { timeoutMs, ...fetchOptions } = options ?? {};
+  const method = fetchOptions.method?.toUpperCase() ?? "GET";
+  const requestTimeoutMs =
+    timeoutMs ?? (method === "GET" ? DEFAULT_GET_TIMEOUT_MS : DEFAULT_MUTATION_TIMEOUT_MS);
+  const resolvedUrl = await resolveRequestUrl(url);
+  const authHeaders = await buildAuthHeaders();
+
+  const headers = new Headers(fetchOptions.headers);
+  headers.set("Accept-Language", headers.get("Accept-Language") || i18n.language || "en");
+  for (const [key, value] of Object.entries(authHeaders)) {
+    if (!headers.has(key)) headers.set(key, value);
+  }
+
+  const controller = new AbortController();
+  let didTimeout = false;
+  const timeout = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, requestTimeoutMs);
+
+  const callerSignal = fetchOptions.signal;
+  const abortFromCaller = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", abortFromCaller, { once: true });
+  }
+
+  try {
+    const res = await fetch(resolvedUrl, {
+      ...fetchOptions,
+      headers,
+      signal: controller.signal,
+    });
+    return res;
+  } catch (err) {
+    if (didTimeout) {
+      throw new Error(`Request timed out while contacting ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+  }
+}
 
 async function request<T>(
   url: string,
-  options?: RequestInit,
+  options?: ApiRequestInit,
 ): Promise<T> {
+  const { timeoutMs, ...fetchOptions } = options ?? {};
+  const method = fetchOptions.method?.toUpperCase() ?? "GET";
+  const requestTimeoutMs =
+    timeoutMs ?? (method === "GET" ? DEFAULT_GET_TIMEOUT_MS : DEFAULT_MUTATION_TIMEOUT_MS);
+
   // Remote mode: use tunnel URL + inject Bearer token
   const remoteConfig = getRemoteConfig();
 
@@ -57,15 +141,23 @@ async function request<T>(
   }
 
   for (let attempt = 0; attempt <= NETWORK_RETRY_MAX; attempt++) {
+    const controller = new AbortController();
+    let didTimeout = false;
+    const timeout = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, requestTimeoutMs);
+
     try {
       const res = await fetch(resolvedUrl, {
         headers: {
           "Content-Type": "application/json",
           "Accept-Language": i18n.language || "en",
           ...authHeaders,
-          ...options?.headers,
+          ...fetchOptions.headers,
         },
-        ...options,
+        ...fetchOptions,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -84,6 +176,10 @@ async function request<T>(
 
       return res.json() as Promise<T>;
     } catch (err) {
+      if (didTimeout) {
+        throw new Error(`Request timed out while contacting ${url}`);
+      }
+
       // Only retry network errors (TypeError = connection refused/reset/failed).
       // Do NOT retry HTTP errors (ApiError) — those are business-level errors.
       if (err instanceof TypeError && attempt < NETWORK_RETRY_MAX) {
@@ -98,6 +194,8 @@ async function request<T>(
         continue;
       }
       throw err;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -105,34 +203,47 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>(url),
+  get: <T>(url: string, options?: ApiRequestInit) => request<T>(url, options),
 
-  post: <T>(url: string, data?: unknown) =>
+  post: <T>(url: string, data?: unknown, options?: ApiRequestInit) =>
     request<T>(url, {
       method: "POST",
       body: data ? JSON.stringify(data) : undefined,
+      ...options,
     }),
 
-  put: <T>(url: string, data: unknown) =>
+  put: <T>(url: string, data: unknown, options?: ApiRequestInit) =>
     request<T>(url, {
       method: "PUT",
       body: JSON.stringify(data),
+      ...options,
     }),
 
-  patch: <T>(url: string, data: unknown) =>
+  patch: <T>(url: string, data: unknown, options?: ApiRequestInit) =>
     request<T>(url, {
       method: "PATCH",
       body: JSON.stringify(data),
+      ...options,
     }),
 
-  delete: <T>(url: string) =>
-    request<T>(url, { method: "DELETE" }),
+  delete: <T>(url: string, options?: ApiRequestInit) =>
+    request<T>(url, { method: "DELETE", ...options }),
 
-  deleteWithBody: <T>(url: string, data: unknown) =>
+  deleteWithBody: <T>(url: string, data: unknown, options?: ApiRequestInit) =>
     request<T>(url, {
       method: "DELETE",
       body: JSON.stringify(data),
+      ...options,
     }),
 };
+
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const detail = (err.body as Record<string, unknown> | undefined)?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    return err.message || fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export { ApiError };

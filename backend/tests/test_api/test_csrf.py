@@ -18,6 +18,7 @@ from httpx import ASGITransport, AsyncClient
 from fastapi import FastAPI
 
 from app.auth.csrf import CsrfProtectionMiddleware
+from app.auth.private_network import PrivateNetworkAccessMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -50,6 +51,10 @@ def _make_app(extra_origins: tuple[str, ...] = ()) -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
+    )
+    app.add_middleware(
+        PrivateNetworkAccessMiddleware,
+        extra_allowed_origins=extra_origins,
     )
     app.add_middleware(
         CsrfProtectionMiddleware,
@@ -423,6 +428,37 @@ class TestCors:
             )
         assert r.headers.get("access-control-allow-origin") == "tauri://localhost"
 
+    @pytest.mark.asyncio
+    async def test_private_network_preflight_accepts_tauri_origin(self):
+        app = _make_app()
+        async with await _client(app) as c:
+            r = await c.options(
+                "/api/echo",
+                headers={
+                    "origin": "http://tauri.localhost",
+                    "access-control-request-method": "GET",
+                    "access-control-request-headers": "authorization, content-type",
+                    "access-control-request-private-network": "true",
+                },
+            )
+        assert r.headers.get("access-control-allow-origin") == "http://tauri.localhost"
+        assert r.headers.get("access-control-allow-private-network") == "true"
+
+    @pytest.mark.asyncio
+    async def test_private_network_preflight_rejects_evil_origin(self):
+        app = _make_app()
+        async with await _client(app) as c:
+            r = await c.options(
+                "/api/echo",
+                headers={
+                    "origin": "https://evil.example",
+                    "access-control-request-method": "GET",
+                    "access-control-request-private-network": "true",
+                },
+            )
+        assert r.headers.get("access-control-allow-origin") != "https://evil.example"
+        assert r.headers.get("access-control-allow-private-network") is None
+
 
 class TestOriginParsingHardening:
     """Reviewer feedback (Arturo, April 2026): prefer stdlib URL parsing
@@ -557,4 +593,3 @@ class TestRuntimeTunnelOrigin:
                 headers={"origin": "https://abc-xyz.trycloudflare.com"},
             )
         assert r.status_code == 200, r.text
-

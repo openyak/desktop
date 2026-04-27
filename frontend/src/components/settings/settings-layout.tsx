@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft } from "lucide-react";
@@ -23,14 +23,22 @@ const UsageTab = dynamic(
   { ssr: false, loading: () => <UsageSkeleton /> },
 );
 
-export default function SettingsPageClient() {
+interface SettingsPageClientProps {
+  initialTab?: SettingsTabId;
+}
+
+export default function SettingsPageClient({ initialTab = "general" }: SettingsPageClientProps) {
   const { t } = useTranslation(["settings", "billing", "usage"]);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeTab = (searchParams.get("tab") as SettingsTabId) || "general";
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const navigateTab = useCallback(
     (tab: string) => {
+      setActiveTab(tab as SettingsTabId);
       router.replace(`/settings?tab=${tab}`, { scroll: false });
     },
     [router],

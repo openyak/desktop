@@ -18,7 +18,7 @@ const PROVIDER_ID_MAP: Record<NonNullable<ActiveProvider>, string | null> = {
 };
 
 export function useProviderModels() {
-  const { data: allModels, isLoading } = useModels();
+  const { data: allModels, isLoading, isError, error } = useModels();
   const activeProvider = useSettingsStore((s) => s.activeProvider);
 
   const data = useMemo(() => {
@@ -41,5 +41,5 @@ export function useProviderModels() {
     return allModels.filter((m) => m.provider_id === providerId);
   }, [allModels, activeProvider]);
 
-  return { data, allModels, isLoading, activeProvider };
+  return { data, allModels, isLoading, isError, error, activeProvider };
 }

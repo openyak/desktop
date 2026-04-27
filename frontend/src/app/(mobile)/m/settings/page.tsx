@@ -94,7 +94,7 @@ export default function MobileSettingsPage() {
     const providerId = id === "chatgpt" ? "openai-subscription" : "openrouter";
     const firstModel = allModels.find((m) => m.provider_id === providerId);
     if (firstModel) {
-      store.setSelectedModel(firstModel.id);
+      store.setSelectedModel(firstModel.id, firstModel.provider_id);
     }
   };
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { API } from "@/lib/constants";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { PPTXData } from "@kandiforge/pptx-renderer";
@@ -107,7 +107,7 @@ export function PptxRenderer({ filePath }: PptxRendererProps) {
         setCurrentSlide(0);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load presentation");
+          setError(apiErrorMessage(err, "Failed to load presentation"));
         }
       } finally {
         if (!cancelled) setLoading(false);

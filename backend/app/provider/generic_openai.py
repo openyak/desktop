@@ -170,9 +170,10 @@ class GenericOpenAIProvider(OpenAICompatProvider):
                 ))
             return models
         except Exception as e:
-            logger.warning("Failed to fetch models from %s API: %s", self._provider_id, e)
             if self._kind == "openai_compat_custom":
+                logger.warning("Failed to fetch models from %s API: %s", self._provider_id, e)
                 raise
+            logger.info("Skipped fetching models from %s API: %s", self._provider_id, e)
             return []
 
 

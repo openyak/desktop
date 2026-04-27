@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { ClipboardList, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePlanReviewStore } from "@/stores/plan-review-store";
@@ -22,7 +22,12 @@ export function PlanFileCard({ data }: PlanFileCardProps) {
   const title = (metadata.title ?? input.title ?? data.state.title ?? "Plan") as string;
   const plan = (metadata.plan ?? input.plan ?? "") as string;
   const planPath = (metadata.plan_path ?? "") as string;
-  const filesToModify = (metadata.files_to_modify ?? input.files_to_modify ?? []) as string[];
+  const metadataFiles = metadata.files_to_modify;
+  const inputFiles = input.files_to_modify;
+  const filesToModify = useMemo(
+    () => (metadataFiles ?? inputFiles ?? []) as string[],
+    [inputFiles, metadataFiles],
+  );
 
   const isRunning = data.state.status === "running" || data.state.status === "pending";
 
