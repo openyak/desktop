@@ -112,10 +112,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   addWorkspaceFile: (file) => {
     const { workspaceFiles } = get();
     if (workspaceFiles.some((f) => f.path === file.path)) return;
-    set({ workspaceFiles: [...workspaceFiles, file], isOpen: true });
+    set({ workspaceFiles: [...workspaceFiles, file] });
   },
 
-  setWorkspaceFiles: (files) => set({ workspaceFiles: files, ...(files.length > 0 ? { isOpen: true } : {}) }),
+  setWorkspaceFiles: (files) => set({ workspaceFiles: files }),
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
   setActiveWorkspacePath: (path) => set({ activeWorkspacePath: path && path !== "." ? path : null }),
 

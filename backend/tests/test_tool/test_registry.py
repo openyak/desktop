@@ -20,7 +20,7 @@ class TestToolRegistry:
         expected = {"read", "write", "edit", "apply_patch", "bash", "code_execute",
                     "glob", "grep", "question", "todo", "task",
                     "web_fetch", "web_search", "invalid",
-                    "plan", "submit_plan", "artifact", "skill"}
+                    "plan", "submit_plan", "artifact", "present_file", "skill"}
         assert tool_ids == expected
 
     def test_get_by_id(self, registry: ToolRegistry):

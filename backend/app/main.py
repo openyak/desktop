@@ -511,6 +511,7 @@ def _register_builtin_tools(
     from app.tool.builtin.grep import GrepTool
     from app.tool.builtin.invalid import InvalidTool
     from app.tool.builtin.plan import PlanTool
+    from app.tool.builtin.present_file import PresentFileTool
     from app.tool.builtin.question import QuestionTool
     from app.tool.builtin.submit_plan import SubmitPlanTool
     from app.tool.builtin.read import ReadTool
@@ -526,7 +527,7 @@ def _register_builtin_tools(
         BashTool, CodeExecuteTool,
         GlobTool, GrepTool, QuestionTool, TodoTool,
         TaskTool, WebFetchTool, WebSearchTool, InvalidTool,
-        PlanTool, SubmitPlanTool, ArtifactTool,
+        PlanTool, SubmitPlanTool, ArtifactTool, PresentFileTool,
     ]:
         registry.register(tool_cls())
 

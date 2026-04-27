@@ -18,6 +18,7 @@ import asyncio
 import datetime
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from sqlalchemy.exc import IntegrityError
@@ -175,6 +176,62 @@ async def _track_session_file(
                 ))
     except Exception:
         logger.debug("Failed to track session file: %s", file_path, exc_info=True)
+
+
+_PRESENTABLE_DELIVERABLE_EXTS = {
+    ".csv",
+    ".docx",
+    ".html",
+    ".md",
+    ".pdf",
+    ".pptx",
+    ".svg",
+    ".txt",
+    ".xlsx",
+}
+
+_NON_PRESENTABLE_OUTPUT_HINTS = {
+    "helper",
+    "scratch",
+    "temp",
+    "tmp",
+}
+
+
+def _presentation_reminder(tool_id: str, metadata: dict[str, Any] | None) -> str:
+    """Return an LLM-only reminder when a tool produced likely deliverables."""
+    if not metadata:
+        return ""
+
+    files: list[str] = []
+    if tool_id in ("write", "edit") and metadata.get("file_path"):
+        files.append(str(metadata["file_path"]))
+    elif tool_id == "code_execute" and metadata.get("written_files"):
+        files.extend(str(path) for path in metadata["written_files"])
+
+    candidates: list[str] = []
+    for file_path in files:
+        path = Path(file_path)
+        suffix = path.suffix.lower()
+        name = path.name.lower()
+        if suffix not in _PRESENTABLE_DELIVERABLE_EXTS:
+            continue
+        if any(hint in name for hint in _NON_PRESENTABLE_OUTPUT_HINTS):
+            continue
+        candidates.append(file_path)
+
+    if not candidates:
+        return ""
+
+    joined = ", ".join(candidates[:5])
+    return (
+        "\n\n<reminder>Potential final deliverable file(s) were created: "
+        f"{joined}. If these are final files the user asked for, call present_file "
+        "for each user-facing deliverable before your final response. Mention "
+        "supporting data files separately unless the user asked to open or share "
+        "them. Do not present temporary scripts, scratch files, logs, helper "
+        "files, or intermediate outputs.</reminder>"
+    )
 
 
 # Extension mapping for artifact types
@@ -1049,6 +1106,8 @@ class SessionProcessor:
 
                     # Build persisted output (may include todo reminder for LLM)
                     persist_output = result.output or result.error or ""
+                    if result.success:
+                        persist_output += _presentation_reminder(tool.id, result.metadata)
 
                     # Inject loop warning into output so LLM sees it
                     if loop_result.action == "warn" and loop_result.message:

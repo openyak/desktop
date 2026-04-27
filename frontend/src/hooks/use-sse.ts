@@ -16,7 +16,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { proxyApi } from "@/lib/proxy-api";
 import { api } from "@/lib/api";
-import { isPreviewableFile, artifactTypeFromExtension, languageFromExtension } from "@/lib/artifacts";
 import type { SessionResponse } from "@/types/session";
 import type { ArtifactType } from "@/types/artifact";
 import type { PaginatedMessages } from "@/types/message";
@@ -310,7 +309,8 @@ export function useSSE(streamId: string | null) {
           data.title,
         );
 
-        // Auto-open artifact panel when the artifact tool is called
+        // The artifact tool is the explicit presentation path. Generic file
+        // writes stay passive so temporary scripts do not interrupt the user.
         // For create: content, type, title are all in args — open immediately
         // For rewrite: content in args, type/title may be absent — open from TOOL_RESULT
         // For update: content is computed server-side — open from TOOL_RESULT
@@ -325,24 +325,6 @@ export function useSSE(streamId: string | null) {
               content: args.content,
               language: args.language,
               identifier: args.identifier,
-            });
-          }
-        }
-
-        // Auto-open artifact panel when write tool creates a previewable file
-        if (data.tool === "write" && data.arguments) {
-          const args = data.arguments as Record<string, string>;
-          const filePath = args.file_path;
-          if (filePath && isPreviewableFile(filePath) && args.content) {
-            const type = artifactTypeFromExtension(filePath) ?? "code";
-            const fileName = filePath.split(/[\\/]/).pop() || "File Preview";
-            useArtifactStore.getState().openArtifact({
-              id: `file-${data.call_id}`,
-              type: type === "file-preview" ? "code" : type,
-              title: fileName,
-              content: args.content,
-              language: languageFromExtension(filePath),
-              filePath,
             });
           }
         }
@@ -390,6 +372,9 @@ export function useSSE(streamId: string | null) {
             }).catch((e) => console.warn("[sse] Failed to refresh workspace files:", e));
           }
         }
+
+        // Explicit file presentation is rendered as an inline file card by
+        // MessageContent. The side preview opens only when the user selects it.
 
         // Update artifact panel for update/rewrite commands
         // (content is computed server-side, not available in TOOL_START args)

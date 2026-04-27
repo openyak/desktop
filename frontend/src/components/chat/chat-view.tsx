@@ -114,7 +114,6 @@ export function ChatView({ sessionId }: ChatViewProps) {
         useWorkspaceStore.getState().setWorkspaceFiles(
           res.files.map((f) => ({ name: f.name, path: f.path, type: f.type as WorkspaceFile["type"] })),
         );
-        useWorkspaceStore.getState().open();
       }
     }).catch(() => {
       // Non-critical — files may not exist yet

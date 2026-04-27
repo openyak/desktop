@@ -18,7 +18,11 @@ class WriteTool(ToolDefinition):
 
     @property
     def description(self) -> str:
-        return "Create a new file or overwrite an existing file with the given content."
+        return (
+            "Create a new file or overwrite an existing file with the given content. "
+            "Use the artifact tool for self-contained visual artifacts. "
+            "After writing a final user-facing file, call present_file to show it."
+        )
 
     def parameters_schema(self) -> dict[str, Any]:
         return {

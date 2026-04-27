@@ -30,10 +30,7 @@ MAX_OUTPUT = 51200  # 50 KB
 
 def _snapshot_workspace(workspace: str | None) -> dict[str, tuple[int, int]]:
     """Return a cheap file snapshot for detecting created/modified files."""
-    if not workspace:
-        return {}
-
-    root = Path(workspace).resolve()
+    root = Path(workspace).resolve() if workspace else Path.cwd().resolve()
     if not root.is_dir():
         return {}
 
