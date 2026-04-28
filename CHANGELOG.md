@@ -6,6 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/), and this project
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-04-27
+
+### Added
+
+- **backend (artifacts):** New `present_file` tool lets agents explicitly present final, user-facing deliverables instead of relying on implicit "file was written" side effects. The processor records presented files as durable message parts so the frontend can render them consistently.
+- **frontend (artifacts):** Generated files now render as inline artifact cards with type-aware labels, icons, download actions, and click-to-preview behavior. Multiple presented files are grouped into a compact grid rather than forcing the workspace panel open.
+- **frontend (preflight):** Comprehensive Playwright coverage for natural office workflows, artifact presentation, error surfaces, long conversations, edge regressions, and deep app surfaces. The suite uses a shared OpenYak API fixture so realistic UI paths can be exercised without a live backend.
+
+### Changed
+
+- **agent workflow:** File writes no longer automatically open the workspace/artifact panel. Temporary helper scripts and intermediate files can stay invisible unless the agent explicitly presents them, which matches the user expectation that only final deliverables should be surfaced.
+- **backend (code execution):** `code_execute` now tracks written files even when no workspace is selected, preserving the session-file record while leaving presentation decisions to `present_file`.
+- **desktop (Windows):** Refreshed Windows app icon assets across the packaged Tauri targets.
+
+### Fixed
+
+- **backend (remote):** Re-downloads the bundled `cloudflared` binary when the existing copy is missing, invalid, or not executable, preventing stale broken tunnel binaries from blocking remote access.
+- **frontend (dev web):** Authenticates the development web proxy path used by the browser client so local web mode can call protected backend APIs without 401 failures.
+- **backend (streaming):** Hardened SSE idle recovery and lock lifecycle behavior so stalled streams and cleanup paths do not leave jobs in an inconsistent state.
+- **frontend (static export):** Moved chat and settings query-param resolution into client components so the desktop release build can prerender `/c/new`, `/c/_`, and `/settings` under Next.js static export.
+- **frontend (ci):** Widened Playwright fixture types for artifact and compaction message parts so `npx tsc --noEmit` passes in CI.
+
 ## [1.1.6] - 2026-04-24
 
 ### Fixed

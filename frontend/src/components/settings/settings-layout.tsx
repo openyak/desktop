@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft } from "lucide-react";
@@ -27,14 +27,22 @@ interface SettingsPageClientProps {
   initialTab?: SettingsTabId;
 }
 
-export default function SettingsPageClient({ initialTab = "general" }: SettingsPageClientProps) {
+const SETTINGS_TAB_IDS = new Set<string>(SETTINGS_TABS.map((tab) => tab.id));
+
+function toSettingsTabId(value: string | null | undefined): SettingsTabId {
+  return SETTINGS_TAB_IDS.has(value ?? "") ? (value as SettingsTabId) : "general";
+}
+
+export default function SettingsPageClient({ initialTab }: SettingsPageClientProps) {
   const { t } = useTranslation(["settings", "billing", "usage"]);
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(initialTab);
+  const searchParams = useSearchParams();
+  const selectedTab = initialTab ?? toSettingsTabId(searchParams.get("tab"));
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(selectedTab);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+    setActiveTab(selectedTab);
+  }, [selectedTab]);
 
   const navigateTab = useCallback(
     (tab: string) => {

@@ -1,14 +1,10 @@
-import { Landing } from "@/components/chat/landing";
+import { Suspense } from "react";
+import { NewChatPageClient } from "./new-chat-page-client";
 
-interface NewChatPageProps {
-  searchParams?: Promise<{ directory?: string | string[] }>;
-}
-
-export default async function NewChatPage({ searchParams }: NewChatPageProps) {
-  const params = await searchParams;
-  const directory = Array.isArray(params?.directory)
-    ? params.directory[0]
-    : params?.directory;
-
-  return <Landing directoryParam={directory ?? null} />;
+export default function NewChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewChatPageClient />
+    </Suspense>
+  );
 }
